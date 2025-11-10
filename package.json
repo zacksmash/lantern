@@ -1,0 +1,31 @@
+{
+	"name": "lantern",
+	"module": "index.ts",
+	"type": "module",
+	"private": true,
+	"dependencies": {
+		"@inertiajs/vue3": "^2.2.15",
+		"tailwindcss": "^4.1.17",
+		"vue": "^3.5.24"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.3.4",
+		"@tailwindcss/vite": "^4.1.17",
+		"@types/bun": "latest",
+		"@vitejs/plugin-vue": "^6.0.1",
+		"vite": "^7.2.2"
+	},
+	"peerDependencies": {
+		"typescript": "^5"
+	},
+	"scripts": {
+		"serve": "bun --hot --watch run lantern.ts",
+		"build": "bunx --bun vite build",
+		"dev": "bunx --bun vite",
+		"start": "bun run serve && vite dev",
+		"test": "bun test",
+		"lint": "bunx biome lint --write",
+		"format": "bunx biome format --write",
+		"check": "bunx biome check --write"
+	}
+}
