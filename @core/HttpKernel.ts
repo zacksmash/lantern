@@ -15,16 +15,16 @@ export class HttpKernel {
 		// kernel -> bootstrap -> middleware -> route -> controller -> response
 
 		// Request
-		//   -> Kernel (start request scope)
-		//     -> Bootstrappers
+		//   -> Kernel (start request scope) ✅
+		//     -> Bootstrappers ✅
 		//       -> Middleware (global)
-		//         -> Router
-		//           -> Route middleware
-		//             -> Controller
+		//         -> Router ✅
+		//           -> Route middleware ✅
+		//             -> Controller ✅
 		//               -> Service layer
 		//                 -> View or JSON
 		//   -> Kernel (end scope)
-		// -> Response
+		// -> Response ✅
 
 		return app.handleRequest(this.request);
 	}

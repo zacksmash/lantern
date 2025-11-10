@@ -6,7 +6,7 @@ export class Database {
 			adapter: 'mysql',
 			hostname: 'localhost',
 			port: 3306,
-			database: 'db_budget',
+			database: 'lantern',
 			username: 'root',
 		});
 	}

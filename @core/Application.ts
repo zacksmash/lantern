@@ -5,6 +5,7 @@ import { DatabaseProvider } from '@core/Providers/DatabaseProvider';
 import type { Route } from '@core/Routing/Route';
 import { Router } from '@core/Routing/Router';
 import { routes } from '@root/routes';
+import '@core/Globals';
 
 export class Application {
 	public basePath: string | null;
@@ -19,18 +20,18 @@ export class Application {
 
 		// Bootstrap application components here
 		// ---
-		// Configuration loading
+		// Configuration loading ✅
 		Config.load();
 
-		// IoC Container initialization
-		// Register service providers
+		// IoC Container initialization ✅
+		// Register service providers ✅
 		for (const provider of this.providers) {
 			if (typeof (provider as any).register === 'function') {
 				(provider as any).register(this.container);
 			}
 		}
 
-		// Boot service providers
+		// Boot service providers ✅
 		for (const provider of this.providers) {
 			if (typeof (provider as any).boot === 'function') {
 				(provider as any).boot(this.container);
@@ -38,7 +39,7 @@ export class Application {
 		}
 
 		// Exception handling setup
-		// Routes setup
+		// Routes setup ✅
 	}
 
 	configure(basePath: string): this {
@@ -48,7 +49,6 @@ export class Application {
 	}
 
 	withRouting(): this {
-		// Integrate routing capabilities here
 		routes(this.router);
 		return this;
 	}
@@ -87,7 +87,6 @@ export class Application {
 			return action(request);
 		}
 
-		// Support Laravel-style [Controller, 'method']
 		if (Array.isArray(action)) {
 			const [ControllerClass, method] = action;
 			const controller = new ControllerClass();

@@ -9,7 +9,7 @@
 		"allowJs": true,
 		"types": ["bun-types/test-globals", "@types/bun", "vite/client"],
 		"paths": {
-			"@/*": ["./assets/*"],
+			"@/*": ["./assets/js/*"],
 			"@app/*": ["./app/*"],
 			"@core/*": ["./@core/*"],
 			"@root/*": ["./*"]

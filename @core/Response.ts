@@ -14,7 +14,7 @@ const viteDev: string | false = await isViteRunning();
 
 async function isInertiaRequest(): Promise<boolean> {
 	const req = request();
-	return req.headers.get('X-Inertia') === 'true';
+	return req?.headers.get('X-Inertia') === 'true';
 }
 
 async function inertiaVersion(): Promise<string> {
@@ -33,7 +33,7 @@ async function inertiaPayload(
 	const payload = {
 		component,
 		props,
-		url: request().url,
+		url: request()?.url,
 		version: await inertiaVersion(),
 		clearHistory: false,
 		encryptHistory: false,
@@ -56,38 +56,14 @@ async function serveInertiaResponse(
 	});
 }
 
-async function viteDevResponse(
-	component: string,
-	props: Record<string, any> = {},
-	html: string,
-): Promise<Response> {
+function viteDevResponse(): string {
 	const viteClientScript = `<script type="module" src="${viteDev}/@vite/client"></script>`;
 	const appScript = `<script type="module" src="${viteDev}/assets/js/app.ts"></script>`;
 
-	const modifiedHtml = html
-		.replace('@vite', `${viteClientScript}\n${appScript}`)
-		.replace(
-			'@inertia',
-			`<div id="app" data-page='${await inertiaPayload(component, props)}'></div>`,
-		);
-
-	return new Response(modifiedHtml, {
-		headers: { 'Content-Type': 'text/html' },
-		status: 200,
-	});
+	return `${viteClientScript}\n${appScript}`;
 }
 
-async function serveResponse(
-	component: string,
-	props: Record<string, any> = {},
-): Promise<Response> {
-	const index = Bun.file('assets/index.html');
-	const html = await index.text();
-
-	if (viteDev) {
-		return viteDevResponse(component, props, html);
-	}
-
+async function viteProdResponse(): Promise<string> {
 	const manifest = Bun.file('public/build/.vite/manifest.json');
 
 	if (!manifest.exists()) {
@@ -104,8 +80,19 @@ async function serveResponse(
 		})
 		.join('\n');
 
+	return `${cssLinks}\n${appScript}`;
+}
+
+async function serveResponse(
+	component: string,
+	props: Record<string, any> = {},
+): Promise<Response> {
+	const index = Bun.file('assets/index.html');
+	const html = await index.text();
+	const assets = viteDev ? viteDevResponse() : viteProdResponse();
+
 	const modifiedHtml = html
-		.replace('@vite', `${cssLinks}\n${appScript}`)
+		.replace('@vite', await assets)
 		.replace(
 			'@inertia',
 			`<div id="app" data-page='${await inertiaPayload(component, props)}'></div>`,
