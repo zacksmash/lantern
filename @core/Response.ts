@@ -10,8 +10,6 @@ async function isViteRunning(): Promise<string | false> {
 	}
 }
 
-const viteDev: string | false = await isViteRunning();
-
 async function isInertiaRequest(): Promise<boolean> {
 	const req = request();
 	return req?.headers.get('X-Inertia') === 'true';
@@ -56,9 +54,9 @@ async function serveInertiaResponse(
 	});
 }
 
-function viteDevResponse(): string {
-	const viteClientScript = `<script type="module" src="${viteDev}/@vite/client"></script>`;
-	const appScript = `<script type="module" src="${viteDev}/assets/js/app.ts"></script>`;
+function viteDevResponse(viteUrl: string): string {
+	const viteClientScript = `<script type="module" src="${viteUrl}/@vite/client"></script>`;
+	const appScript = `<script type="module" src="${viteUrl}/assets/js/app.ts"></script>`;
 
 	return `${viteClientScript}\n${appScript}`;
 }
@@ -89,7 +87,8 @@ async function serveResponse(
 ): Promise<Response> {
 	const index = Bun.file('assets/index.html');
 	const html = await index.text();
-	const assets = viteDev ? viteDevResponse() : viteProdResponse();
+	const viteDev = await isViteRunning();
+	const assets = viteDev ? viteDevResponse(viteDev) : viteProdResponse();
 
 	const modifiedHtml = html
 		.replace('@vite', await assets)

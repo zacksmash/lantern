@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// biome-ignore lint: noUnusedVariables
 import { Link } from '@inertiajs/vue3';
 </script>
 

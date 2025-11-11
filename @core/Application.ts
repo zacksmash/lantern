@@ -84,6 +84,12 @@ export class Application {
 		const action = route.action;
 
 		if (typeof action === 'function') {
+			if (action.prototype && typeof action.prototype.invoke === 'function') {
+				// @ts-expect-error
+				return new action().invoke(request);
+			}
+
+			// @ts-expect-error
 			return action(request);
 		}
 

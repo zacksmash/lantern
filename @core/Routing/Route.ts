@@ -1,5 +1,6 @@
 export type RouteAction =
 	| ((req: Request) => Response | Promise<Response>)
+	| (new () => any)
 	| [new () => any, string];
 
 export class Route {

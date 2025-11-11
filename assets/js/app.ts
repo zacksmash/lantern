@@ -11,7 +11,10 @@ createInertiaApp({
 	resolve: (name: string) => {
 		const pages = import.meta.glob('./Pages/**/*.vue', {
 			eager: true,
-		}) as Record<string, { default: DefineComponent }>;
+		}) as DefineComponent;
+		if (!pages[`./Pages/${name}.vue`]?.default) {
+			throw new Error(`Page not found: ./Pages/${name}.vue`);
+		}
 		return pages[`./Pages/${name}.vue`]?.default;
 	},
 	setup({ el, App, props, plugin }) {

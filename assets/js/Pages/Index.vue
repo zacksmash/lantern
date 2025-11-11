@@ -1,7 +1,5 @@
 <script setup lang="ts">
-// biome-ignore lint: noUnusedVariables
 import { Link } from '@inertiajs/vue3';
-// biome-ignore lint: noUnusedVariables
 import Lantern from '@/Components/Lantern.vue';
 
 const props = defineProps({
@@ -15,6 +13,8 @@ const props = defineProps({
       {{ name }}JS
     </h1>
     <Lantern />
-    <Link href="/about">Go to About</Link>
+    <div>
+      <Link href="/about">Go to About</Link> | <Link href="/test">Go to Test</Link>
+    </div>
   </div>
 </template>
