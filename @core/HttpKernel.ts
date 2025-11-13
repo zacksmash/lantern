@@ -13,7 +13,7 @@ export class HttpKernel {
 		return await app.handleRequest(this.request);
 	}
 
-	async checkForStaticRequest(): Promise<Response | null> {
+	private async checkForStaticRequest(): Promise<Response | void> {
 		const url = new URL(this.request.url);
 		const pathname = url.pathname;
 
@@ -22,11 +22,9 @@ export class HttpKernel {
 		if (await file.exists()) {
 			return new Response(file);
 		}
-
-		return null;
 	}
 
-	async checkForMaintenanceMode(): Promise<Response | null> {
+	private async checkForMaintenanceMode(): Promise<Response | null> {
 		const maintenance = Bun.file('storage/app/.maintenance');
 
 		if (await maintenance.exists()) {

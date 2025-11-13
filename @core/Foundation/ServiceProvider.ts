@@ -4,14 +4,12 @@ import { Container } from '@core/Container';
 export type ProviderConstructor = new (app: Application) => ServiceProvider;
 
 export abstract class ServiceProvider {
-  protected app: Application;
   protected container: Container;
 
-  constructor(app: Application) {
-    this.app = app;
-    this.container = app.container;
+  constructor(protected app: Application) {
+    this.container = app.getContainer();
   }
 
-  register(container: Container): void {}
-  boot(container: Container): void {}
+  register(): void {}
+  boot(): void {}
 }

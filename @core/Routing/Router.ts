@@ -41,7 +41,7 @@ export class Router {
 		return null;
 	}
 
-	async dispatch(request: Request): Promise<Response> {
+	protected async dispatch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 		const route = this.match(request.method, url.pathname);
 
