@@ -2,7 +2,7 @@ declare global {
   var dd: (...args: any[]) => Response;
 }
 
-globalThis.dd = function (...args: any[]) {
+globalThis.dd = function (...args: any[]): Response {
   const output = args.map(arg => {
     try {
       return typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean'

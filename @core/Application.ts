@@ -19,6 +19,18 @@ export class Application {
     this.registerProviders();
   }
 
+  public configure(basePath: string): this {
+    this.basePath = basePath;
+
+    this.bootProviders();
+
+    return this;
+  }
+
+  public create(): Application {
+    return this;
+  }
+
   private registerProviders() {
     for (const provider of this.serviceProviders) {
       provider.register(this.container);
@@ -35,14 +47,6 @@ export class Application {
     this.providersBooted = true;
   }
 
-  private configure(basePath: string): this {
-    this.basePath = basePath;
-
-    this.bootProviders();
-
-    return this;
-  }
-
   public singleton(key: string, resolver: any) {
     this.container.singleton(key, resolver);
   }
@@ -53,10 +57,6 @@ export class Application {
 
   public instance(key: string, value: any) {
     this.container.instance(key, value);
-  }
-
-  private create(): Application {
-    return this;
   }
 
   resolve<T = any>(key: string): T {

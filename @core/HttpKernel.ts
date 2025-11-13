@@ -10,15 +10,7 @@ export class HttpKernel {
 		const staticRequest = await this.checkForStaticRequest();
 		if (staticRequest) return staticRequest;
 
-		try {
-			return await app.handleRequest(this.request);
-		} catch (err) {
-				if (err instanceof Response) {
-						return err;
-				}
-
-				throw err;
-		}
+		return await app.handleRequest(this.request);
 	}
 
 	async checkForStaticRequest(): Promise<Response | null> {

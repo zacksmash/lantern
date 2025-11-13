@@ -1,21 +1,7 @@
-import { HttpKernel } from '@core/HttpKernel';
-import { RequestContext } from '@core/RequestContext';
-
+import { HandleResponse, HandleError } from '@core/ProcessRequest';
 
 Bun.serve({
 	development: process.env.APP_ENV === 'development',
-	fetch: async (request: Request) => {
-		return await RequestContext.run(request, async () => {
-			const res = await new HttpKernel(request).handle();
-
-			if (res instanceof Response) return res;
-
-			return new Response("Internal Server Error", { status: 500 });
-		});
-	},
-	error(err: unknown) {
-		if (err instanceof Response) return err;
-
-		throw err;
-	}
+	fetch: async (request: Request) => HandleResponse(request),
+	error: (error: any) => HandleError(error),
 });

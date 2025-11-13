@@ -1,5 +1,3 @@
-import { SomethingProvider } from "@app/providers/SomethingProvider";
-
 export default [
-  SomethingProvider
+  // Register app providers here
 ]
