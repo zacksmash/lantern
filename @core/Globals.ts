@@ -1,9 +1,3 @@
-declare global {
-	var env: (key: string, defaultValue?: string) => string | undefined;
-}
+import { env } from "@core/Env";
 
-globalThis.env = (key: string, defaultValue?: string): string | undefined => {
-	return process.env[key] ?? defaultValue;
-};
-
-export {};
+globalThis.env = env as typeof env;

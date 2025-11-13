@@ -20,6 +20,9 @@
 			"complexity": {
 				"noStaticOnlyClass": "off"
 			},
+			"style": {
+				"noNonNullAssertion": "off"
+			},
 			"suspicious": {
 				"noExplicitAny": "off"
 			}

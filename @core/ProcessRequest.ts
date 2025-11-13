@@ -1,5 +1,8 @@
+import { loadEnv } from "@core/Env";
 import { HttpKernel } from "@core/HttpKernel";
 import { RequestContext } from "@core/RequestContext";
+
+loadEnv();
 
 const HandleResponse = async (request: Request): Promise<Response> => {
 	return await RequestContext.run(
