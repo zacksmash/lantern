@@ -1,28 +1,56 @@
 export class Container {
-	private bindings = new Map();
-	private singletons = new Map();
+  protected bindings = new Map<string, any>();
+  protected singletons = new Map<string, any>();
+  protected instances = new Map<string, any>();
 
-	bind(key: string, factory: () => any) {
-		this.bindings.set(key, factory);
-	}
+  // Register a factory (new instance every resolve)
+  bind<T>(identifier: string, factory: () => T): void {
+    this.bindings.set(identifier, factory);
+  }
 
-	singleton(key: string, factory: () => any) {
-		this.bindings.set(key, factory);
-		this.singletons.set(key, null);
-	}
+  // Register a factory that resolves once
+  singleton<T>(identifier: string, factory: () => T): void {
+    this.singletons.set(identifier, factory);
+  }
 
-	make<T = any>(key: string): T {
-		// If it's a singleton and already created → return
-		if (this.singletons.has(key)) {
-			const existing = this.singletons.get(key);
-			if (existing) return existing;
+  // Register a literal value or object
+  instance<T>(identifier: string, value: T): void {
+    this.instances.set(identifier, value);
+  }
 
-			const instance = this.bindings.get(key)();
-			this.singletons.set(key, instance);
-			return instance;
-		}
+  resolve<T>(identifier: string): T {
+    // If literal instance
+    if (this.instances.has(identifier)) {
+      return this.instances.get(identifier);
+    }
 
-		// Normal binding
-		return this.bindings.get(key)();
-	}
+    // If singleton
+    if (this.singletons.has(identifier)) {
+      const factory = this.singletons.get(identifier);
+
+      // If already created
+      const existing = this.bindings.get(identifier);
+      if (existing && typeof existing !== "function") {
+        return existing;
+      }
+
+      // Create singleton once
+      const instance = factory();
+      this.bindings.set(identifier, instance);
+      return instance;
+    }
+
+    // If factory binding
+    if (this.bindings.has(identifier)) {
+      const binding = this.bindings.get(identifier);
+
+      if (typeof binding === "function") {
+        return binding();
+      }
+
+      return binding; // raw object
+    }
+
+    throw new Error(`Identifier ${identifier} not found in container.`);
+  }
 }

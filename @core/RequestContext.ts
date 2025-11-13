@@ -1,7 +1,13 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
+import { AsyncLocalStorage } from "async_hooks";
 
-export const RequestContext = new AsyncLocalStorage<Request>();
+export class RequestContext {
+  private static storage = new AsyncLocalStorage<Request>();
 
-export function request(): Request | undefined {
-	return RequestContext.getStore();
+  static run(request: Request, callback: () => any) {
+    return this.storage.run(request, callback);
+  }
+
+  static get(): Request | undefined {
+    return this.storage.getStore();
+  }
 }

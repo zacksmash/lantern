@@ -1,26 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-interface LanternConfig {
-	input: string;
-	output: string;
-}
-
-export default function lantern(lantern?: LanternConfig) {
+export default function lantern() {
 	return {
-		name: 'lantern-vite-config',
+		name: 'lantern-plugin-vite',
 
 		config() {
 			return {
 				build: {
 					manifest: true,
-					outDir: lantern?.output || 'public/build',
+					outDir: 'public/build',
 					emptyOutDir: true,
 					rollupOptions: {
-						input: path.resolve(
-							process.cwd(),
-							lantern?.input || 'assets/js/app.ts',
-						),
+						input: path.resolve(process.cwd(), 'assets/js/app.ts'),
 					},
 				},
 

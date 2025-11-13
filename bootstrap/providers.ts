@@ -1,3 +1,5 @@
+import { SomethingProvider } from "@app/providers/SomethingProvider";
+
 export default [
-	// TODO Add your service providers here
-];
+  SomethingProvider
+]

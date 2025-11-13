@@ -1,104 +1,71 @@
-import { Config } from '@core/Config';
 import { Container } from '@core/Container';
-import { CacheProvider } from '@core/Providers/CacheProvider';
-import { DatabaseProvider } from '@core/Providers/DatabaseProvider';
-import type { Route } from '@core/Routing/Route';
-import { Router } from '@core/Routing/Router';
-import { routes } from '@root/routes';
-import '@core/Globals';
+import { type ProviderConstructor } from './Foundation/ServiceProvider';
+import { Providers } from '@core/Foundation/Providers';
 
 export class Application {
-	public basePath: string | null;
-	public request: Request | null;
-	public container = new Container();
-	public router = new Router();
-	public providers = [new DatabaseProvider(), new CacheProvider()];
+  container: Container;
+  private basePath: string = '';
+  private providersBooted = false;
+  private loadedProviders: ProviderConstructor[] = Providers;
+  private serviceProviders: InstanceType<ProviderConstructor>[] = [];
 
-	constructor() {
-		this.basePath = null;
-		this.request = null;
+  constructor() {
+    this.container = new Container();
 
-		// Bootstrap application components here
-		// ---
-		// Configuration loading ✅
-		Config.load();
+    this.serviceProviders = this.loadedProviders.map(
+      ProviderClass => new ProviderClass(this)
+    );
 
-		// IoC Container initialization ✅
-		// Register service providers ✅
-		for (const provider of this.providers) {
-			if (typeof (provider as any).register === 'function') {
-				(provider as any).register(this.container);
-			}
-		}
+    this.registerProviders();
+  }
 
-		// Boot service providers ✅
-		for (const provider of this.providers) {
-			if (typeof (provider as any).boot === 'function') {
-				(provider as any).boot(this.container);
-			}
-		}
+  private registerProviders() {
+    for (const provider of this.serviceProviders) {
+      provider.register(this.container);
+    }
+  }
 
-		// Exception handling setup
-		// Routes setup ✅
-	}
+  private bootProviders() {
+    if (this.providersBooted) return;
 
-	configure(basePath: string): this {
-		this.basePath = basePath;
+    for (const provider of this.serviceProviders) {
+      provider.boot(this.container);
+    }
 
-		return this;
-	}
+    this.providersBooted = true;
+  }
 
-	withRouting(): this {
-		routes(this.router);
-		return this;
-	}
+  private configure(basePath: string): this {
+    this.basePath = basePath;
 
-	withMiddleware(): this {
-		// Integrate middleware capabilities here
-		return this;
-	}
+    this.bootProviders();
 
-	withExceptions(): this {
-		// Integrate error handling capabilities here
-		return this;
-	}
+    return this;
+  }
 
-	create() {
-		return this;
-	}
+  public singleton(key: string, resolver: any) {
+    this.container.singleton(key, resolver);
+  }
 
-	async handleRequest(request: Request): Promise<Response> {
-		this.request = request;
+  public bind(key: string, resolver: any) {
+    this.container.bind(key, resolver);
+  }
 
-		const url = new URL(request.url);
-		const route = this.router.match(request.method, url.pathname);
+  public instance(key: string, value: any) {
+    this.container.instance(key, value);
+  }
 
-		if (!route) {
-			return new Response('Not Found', { status: 404 });
-		}
+  private create(): Application {
+    return this;
+  }
 
-		return this.dispatch(route, request);
-	}
+  resolve<T = any>(key: string): T {
+    return this.container.resolve(key);
+  }
 
-	async dispatch(route: Route, request: Request): Promise<Response> {
-		const action = route.action;
+  async handleRequest(request: Request): Promise<Response> {
+    const router = this.resolve('router');
 
-		if (typeof action === 'function') {
-			if (action.prototype && typeof action.prototype.invoke === 'function') {
-				// @ts-expect-error
-				return new action().invoke(request);
-			}
-
-			// @ts-expect-error
-			return action(request);
-		}
-
-		if (Array.isArray(action)) {
-			const [ControllerClass, method] = action;
-			const controller = new ControllerClass();
-			return controller[method](request);
-		}
-
-		throw new Error('Invalid route action');
-	}
+    return router.dispatch(request);
+  }
 }

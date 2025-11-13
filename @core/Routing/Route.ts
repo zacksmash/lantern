@@ -4,9 +4,9 @@ export type RouteAction =
 	| [new () => any, string];
 
 export class Route {
-	public routeName: string | null = null;
-	public routeMiddleware: any[] = [];
-	public params: string[] = [];
+	routeName: string | null = null;
+	routeMiddleware: any[] = [];
+	params: string[] = [];
 
 	constructor(
 		public method: string,

@@ -1,9 +1,40 @@
+import '@core/Globals';
 import { app } from '@root/bootstrap/app';
 
 export class HttpKernel {
 	constructor(private request: Request) {}
 
-	async boot(): Promise<Response> {
+	async handle(): Promise<Response> {
+		await this.checkForMaintenanceMode();
+
+		const staticRequest = await this.checkForStaticRequest();
+		if (staticRequest) return staticRequest;
+
+		try {
+			return await app.handleRequest(this.request);
+		} catch (err) {
+				if (err instanceof Response) {
+						return err;
+				}
+
+				throw err;
+		}
+	}
+
+	async checkForStaticRequest(): Promise<Response | null> {
+		const url = new URL(this.request.url);
+		const pathname = url.pathname;
+
+		const file = Bun.file(`./public${pathname}`);
+
+		if (await file.exists()) {
+			return new Response(file);
+		}
+
+		return null;
+	}
+
+	async checkForMaintenanceMode(): Promise<Response | null> {
 		const maintenance = Bun.file('storage/app/.maintenance');
 
 		if (await maintenance.exists()) {
@@ -12,20 +43,6 @@ export class HttpKernel {
 			});
 		}
 
-		// kernel -> bootstrap -> middleware -> route -> controller -> response
-
-		// Request
-		//   -> Kernel (start request scope) ✅
-		//     -> Bootstrappers ✅
-		//       -> Middleware (global)
-		//         -> Router ✅
-		//           -> Route middleware ✅
-		//             -> Controller ✅
-		//               -> Service layer
-		//                 -> View or JSON
-		//   -> Kernel (end scope)
-		// -> Response ✅
-
-		return app.handleRequest(this.request);
+		return null;
 	}
 }
