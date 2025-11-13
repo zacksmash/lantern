@@ -7,7 +7,7 @@ loadEnv();
 const HandleResponse = async (request: Request): Promise<Response> => {
 	return await RequestContext.run(
 		request,
-		async () => await new HttpKernel(request).handle(),
+		async () => await new HttpKernel(request).boot(),
 	);
 };
 

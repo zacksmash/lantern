@@ -1,16 +1,40 @@
 import "@core/Globals";
+import type { Middleware } from "@core/Foundation/Middleware";
+import { Middlewares } from "@core/Foundation/MiddlewaresManifest";
 import { app } from "@root/bootstrap/app";
 
 export class HttpKernel {
 	constructor(private request: Request) {}
 
-	async handle(): Promise<Response> {
-		await this.checkForMaintenanceMode();
+	async boot(): Promise<Response> {
+		const maintenance = await this.checkForMaintenanceMode();
+		if (maintenance) return maintenance;
 
-		const staticRequest = await this.checkForStaticRequest();
-		if (staticRequest) return staticRequest;
+		const staticResponse = await this.checkForStaticRequest();
+		if (staticResponse) return staticResponse;
 
-		return app.handleRequest(this.request);
+		return this.handleMiddlewareStack();
+	}
+
+	private async handleMiddlewareStack(): Promise<Response> {
+		const middleware: Middleware[] = Middlewares.map(
+			(middleware) => new middleware(),
+		);
+
+		const stack = this.buildMiddlewareStack(middleware, () =>
+			app.handleRequest(this.request),
+		);
+
+		return stack();
+	}
+
+	private buildMiddlewareStack(
+		middleware: Middleware[],
+		finalHandler: () => Promise<Response>,
+	): () => Promise<Response> {
+		return middleware.reduceRight((next, layer) => {
+			return () => layer.handle(this.request, next);
+		}, finalHandler);
 	}
 
 	private async checkForMaintenanceMode(): Promise<Response | null> {
