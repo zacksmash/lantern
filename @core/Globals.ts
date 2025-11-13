@@ -1,3 +1,4 @@
-import { env } from "@core/Env";
+import { Env } from "@core/Env";
 
-globalThis.env = env as typeof env;
+const env = new Env();
+globalThis.env = env.get.bind(env);
