@@ -21,6 +21,14 @@ export class HttpKernel {
 			(middleware) => new middleware(),
 		);
 
+		const route = app.router.findRoute(this.request);
+
+		if (route) {
+			for (const routeMiddleware of route.routeMiddleware) {
+				middleware.push(new routeMiddleware());
+			}
+		}
+
 		const stack = this.buildMiddlewareStack(middleware, () =>
 			app.handleRequest(this.request),
 		);

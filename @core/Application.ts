@@ -4,6 +4,7 @@ import type { Router } from "@core/Routing/Router";
 import type { ProviderConstructor } from "./Foundation/ServiceProvider";
 
 export class Application {
+	router: Router;
 	private basePath: string = "";
 	private container: Container;
 
@@ -15,6 +16,8 @@ export class Application {
 		this.container = new Container();
 
 		this.registerProviders();
+
+		this.router = this.resolve("router") as Router;
 	}
 
 	getBasePath(): string {

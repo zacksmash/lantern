@@ -41,7 +41,7 @@ export class Router {
 		return route;
 	}
 
-	protected findRoute(request: Request): Route | null {
+	findRoute(request: Request): Route | null {
 		const url = new URL(request.url);
 		const pathname = url.pathname;
 		const method = request.method;
