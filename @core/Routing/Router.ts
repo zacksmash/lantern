@@ -15,17 +15,37 @@ export class Router {
 		return this.addRoute('PUT', path, action);
 	}
 
+	patch(path: string, action: RouteAction) {
+		return this.addRoute('PATCH', path, action);
+	}
+
 	delete(path: string, action: RouteAction) {
 		return this.addRoute('DELETE', path, action);
 	}
 
-	addRoute(method: string, path: string, action: RouteAction) {
+	options(path: string, action: RouteAction) {
+		return this.addRoute('OPTIONS', path, action);
+	}
+
+	head(path: string, action: RouteAction) {
+		return this.addRoute('HEAD', path, action);
+	}
+
+	async dispatch(request: Request): Promise<Response> {
+		return this.runRoute(this.findRoute(request), request);
+	}
+
+	protected addRoute(method: string, path: string, action: RouteAction) {
 		const route = new Route(method, path, action);
 		this.routes.push(route);
 		return route;
 	}
 
-	match(method: string, pathname: string): Route | null {
+	protected findRoute(request: Request): Route | null {
+		const url = new URL(request.url);
+		const pathname = url.pathname;
+		const method = request.method;
+
 		for (const route of this.routes) {
 			const regex = new RegExp(
 				`^${route.path.replace(/:([^/]+)/g, '([^/]+)')}$`,
@@ -41,10 +61,7 @@ export class Router {
 		return null;
 	}
 
-	protected async dispatch(request: Request): Promise<Response> {
-		const url = new URL(request.url);
-		const route = this.match(request.method, url.pathname);
-
+	protected runRoute(route: Route|null, request: Request): Promise<Response> | Response {
 		if (!route) {
 				return new Response('Not Found', { status: 404 });
 		}

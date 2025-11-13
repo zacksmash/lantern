@@ -1,6 +1,7 @@
 import { Container } from '@core/Container';
 import { type ProviderConstructor } from './Foundation/ServiceProvider';
 import { Providers } from '@core/Foundation/ProvidersManifest';
+import { Router } from '@core/Routing/Router';
 
 export class Application {
   private basePath: string = '';
@@ -17,7 +18,7 @@ export class Application {
   }
 
   async handleRequest(request: Request): Promise<Response> {
-    const router = this.resolve('router');
+    const router = this.resolve('router') as Router;
 
     return router.dispatch(request);
   }
