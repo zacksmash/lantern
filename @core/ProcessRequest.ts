@@ -8,7 +8,7 @@ const HandleResponse = async (request: Request): Promise<Response> => {
 }
 
 const HandleError = async (error: any): Promise<Response> => {
-  const environment = process.env.APP_ENV || 'production';
+  const environment = env('APP_ENV', 'production');
 
   if (environment === 'development') {
     if (error instanceof Response) {

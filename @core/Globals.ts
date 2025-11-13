@@ -1,5 +1,6 @@
 declare global {
   var dd: (...args: any[]) => Response;
+  var env: (key: string, defaultValue?: string) => string | undefined;
 }
 
 globalThis.dd = function (...args: any[]): Response {
@@ -34,5 +35,9 @@ globalThis.dd = function (...args: any[]): Response {
     headers: { "Content-Type": "text/html" }
   });
 };
+
+globalThis.env = function (key: string, defaultValue?: string): string | undefined {
+  return process.env[key] ?? defaultValue;
+}
 
 export {};
