@@ -1,5 +1,5 @@
 import { Container } from "@core/Container";
-import { Providers } from "@core/Foundation/ProvidersManifest";
+import { Providers } from "@core/Foundation/ServiceProvidersManifest";
 import type { Router } from "@core/Routing/Router";
 import type { ProviderConstructor } from "./Foundation/ServiceProvider";
 
