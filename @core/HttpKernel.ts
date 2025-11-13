@@ -10,18 +10,7 @@ export class HttpKernel {
 		const staticRequest = await this.checkForStaticRequest();
 		if (staticRequest) return staticRequest;
 
-		return await app.handleRequest(this.request);
-	}
-
-	private async checkForStaticRequest(): Promise<Response | void> {
-		const url = new URL(this.request.url);
-		const pathname = url.pathname;
-
-		const file = Bun.file(`./public${pathname}`);
-
-		if (await file.exists()) {
-			return new Response(file);
-		}
+		return app.handleRequest(this.request);
 	}
 
 	private async checkForMaintenanceMode(): Promise<Response | null> {
@@ -34,5 +23,16 @@ export class HttpKernel {
 		}
 
 		return null;
+	}
+
+	private async checkForStaticRequest(): Promise<Response | void> {
+		const url = new URL(this.request.url);
+		const pathname = url.pathname;
+
+		const file = Bun.file(`./public${pathname}`);
+
+		if (await file.exists()) {
+			return new Response(file);
+		}
 	}
 }

@@ -69,7 +69,7 @@ export class Router {
 		const action = route.action;
 
 		if (typeof action === 'function') {
-			if (action.prototype && typeof action.prototype.invoke === 'function') {
+			if (action.prototype && typeof action.prototype.constructor === 'function' && action.prototype.invoke) {
 				// @ts-expect-error
 				return new action().invoke(request);
 			}
