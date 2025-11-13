@@ -1,3 +1,3 @@
 export default [
-  // Register app providers here
-]
+	// Register app providers here
+];

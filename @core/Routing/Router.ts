@@ -1,34 +1,34 @@
-import { Route, type RouteAction } from '@core/Routing/Route';
+import { Route, type RouteAction } from "@core/Routing/Route";
 
 export class Router {
 	routes: Route[] = [];
 
 	get(path: string, action: RouteAction) {
-		return this.addRoute('GET', path, action);
+		return this.addRoute("GET", path, action);
 	}
 
 	post(path: string, action: RouteAction) {
-		return this.addRoute('POST', path, action);
+		return this.addRoute("POST", path, action);
 	}
 
 	put(path: string, action: RouteAction) {
-		return this.addRoute('PUT', path, action);
+		return this.addRoute("PUT", path, action);
 	}
 
 	patch(path: string, action: RouteAction) {
-		return this.addRoute('PATCH', path, action);
+		return this.addRoute("PATCH", path, action);
 	}
 
 	delete(path: string, action: RouteAction) {
-		return this.addRoute('DELETE', path, action);
+		return this.addRoute("DELETE", path, action);
 	}
 
 	options(path: string, action: RouteAction) {
-		return this.addRoute('OPTIONS', path, action);
+		return this.addRoute("OPTIONS", path, action);
 	}
 
 	head(path: string, action: RouteAction) {
-		return this.addRoute('HEAD', path, action);
+		return this.addRoute("HEAD", path, action);
 	}
 
 	async dispatch(request: Request): Promise<Response> {
@@ -48,7 +48,7 @@ export class Router {
 
 		for (const route of this.routes) {
 			const regex = new RegExp(
-				`^${route.path.replace(/:([^/]+)/g, '([^/]+)')}$`,
+				`^${route.path.replace(/:([^/]+)/g, "([^/]+)")}$`,
 			);
 			const match = pathname.match(regex);
 
@@ -61,15 +61,22 @@ export class Router {
 		return null;
 	}
 
-	protected runRoute(route: Route|null, request: Request): Promise<Response> | Response {
+	protected runRoute(
+		route: Route | null,
+		request: Request,
+	): Promise<Response> | Response {
 		if (!route) {
-				return new Response('Not Found', { status: 404 });
+			return new Response("Not Found", { status: 404 });
 		}
 
 		const action = route.action;
 
-		if (typeof action === 'function') {
-			if (action.prototype && typeof action.prototype.constructor === 'function' && action.prototype.invoke) {
+		if (typeof action === "function") {
+			if (
+				action.prototype &&
+				typeof action.prototype.constructor === "function" &&
+				action.prototype.invoke
+			) {
 				// @ts-expect-error
 				return new action().invoke(request);
 			}
@@ -84,6 +91,6 @@ export class Router {
 			return controller[method](request);
 		}
 
-		throw new Error('Invalid route action');
+		throw new Error("Invalid route action");
 	}
 }

@@ -1,9 +1,9 @@
 declare global {
-  var env: (key: string, defaultValue?: string) => string | undefined;
+	var env: (key: string, defaultValue?: string) => string | undefined;
 }
 
-globalThis.env = function (key: string, defaultValue?: string): string | undefined {
-  return process.env[key] ?? defaultValue;
-}
+globalThis.env = (key: string, defaultValue?: string): string | undefined => {
+	return process.env[key] ?? defaultValue;
+};
 
 export {};

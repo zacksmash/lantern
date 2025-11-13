@@ -1,77 +1,81 @@
-import { Container } from '@core/Container';
-import { type ProviderConstructor } from './Foundation/ServiceProvider';
-import { Providers } from '@core/Foundation/ProvidersManifest';
-import { Router } from '@core/Routing/Router';
+import { Container } from "@core/Container";
+import { Providers } from "@core/Foundation/ProvidersManifest";
+import type { Router } from "@core/Routing/Router";
+import type { ProviderConstructor } from "./Foundation/ServiceProvider";
 
 export class Application {
-  private basePath: string = '';
-  private container: Container;
+	private basePath: string = "";
+	private container: Container;
 
-  private providersBooted = false;
-  private loadedProviders: ProviderConstructor[] = Providers;
-  private serviceProviders: InstanceType<ProviderConstructor>[] = [];
+	private providersBooted = false;
+	private loadedProviders: ProviderConstructor[] = Providers;
+	private serviceProviders: InstanceType<ProviderConstructor>[] = [];
 
-  constructor() {
-    this.container = new Container();
+	constructor() {
+		this.container = new Container();
 
-    this.registerProviders();
-  }
+		this.registerProviders();
+	}
 
-  async handleRequest(request: Request): Promise<Response> {
-    const router = this.resolve('router') as Router;
+	getBasePath(): string {
+		return this.basePath;
+	}
 
-    return router.dispatch(request);
-  }
+	async handleRequest(request: Request): Promise<Response> {
+		const router = this.resolve("router") as Router;
 
-  configure(basePath: string): this {
-    this.basePath = basePath;
+		return router.dispatch(request);
+	}
 
-    this.bootProviders();
+	configure(basePath: string): this {
+		this.basePath = basePath;
 
-    return this;
-  }
+		this.bootProviders();
 
-  create(): Application {
-    return this;
-  }
+		return this;
+	}
 
-  singleton(key: string, resolver: any) {
-    this.container.singleton(key, resolver);
-  }
+	create(): Application {
+		return this;
+	}
 
-  bind(key: string, resolver: any) {
-    this.container.bind(key, resolver);
-  }
+	singleton(key: string, resolver: any) {
+		this.container.singleton(key, resolver);
+	}
 
-  instance(key: string, value: any) {
-    this.container.instance(key, value);
-  }
+	bind(key: string, resolver: any) {
+		this.container.bind(key, resolver);
+	}
 
-  resolve<T = any>(key: string): T {
-    return this.container.resolve(key);
-  }
+	instance(key: string, value: any) {
+		this.container.instance(key, value);
+	}
 
-  getContainer(): Container {
-    return this.container;
-  }
+	resolve<T = any>(key: string): T {
+		return this.container.resolve(key);
+	}
 
-  private registerProviders() {
-    this.serviceProviders = this.loadedProviders.map(
-      ProviderClass => new ProviderClass(this)
-    );
+	getContainer(): Container {
+		return this.container;
+	}
 
-    for (const provider of this.serviceProviders) {
-      provider.register();
-    }
-  }
+	private registerProviders() {
+		this.serviceProviders = this.loadedProviders.map(
+			(ProviderClass) => new ProviderClass(this),
+		);
 
-  private bootProviders() {
-    if (this.providersBooted) return;
+		for (const provider of this.serviceProviders) {
+			provider.register();
+		}
+	}
 
-    for (const provider of this.serviceProviders) {
-      provider.boot();
-    }
+	private bootProviders() {
+		if (this.providersBooted) return;
 
-    this.providersBooted = true;
-  }
+		for (const provider of this.serviceProviders) {
+			provider.boot();
+		}
+
+		this.providersBooted = true;
+	}
 }

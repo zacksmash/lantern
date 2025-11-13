@@ -1,5 +1,5 @@
-import '@core/Globals';
-import { app } from '@root/bootstrap/app';
+import "@core/Globals";
+import { app } from "@root/bootstrap/app";
 
 export class HttpKernel {
 	constructor(private request: Request) {}
@@ -14,10 +14,10 @@ export class HttpKernel {
 	}
 
 	private async checkForMaintenanceMode(): Promise<Response | null> {
-		const maintenance = Bun.file('storage/app/.maintenance');
+		const maintenance = Bun.file("storage/app/.maintenance");
 
 		if (await maintenance.exists()) {
-			return new Response('The application is under maintenance.', {
+			return new Response("The application is under maintenance.", {
 				status: 503,
 			});
 		}
@@ -25,7 +25,7 @@ export class HttpKernel {
 		return null;
 	}
 
-	private async checkForStaticRequest(): Promise<Response | void> {
+	private async checkForStaticRequest(): Promise<Response | null> {
 		const url = new URL(this.request.url);
 		const pathname = url.pathname;
 
@@ -34,5 +34,7 @@ export class HttpKernel {
 		if (await file.exists()) {
 			return new Response(file);
 		}
+
+		return null;
 	}
 }

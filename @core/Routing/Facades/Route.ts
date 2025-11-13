@@ -1,3 +1,3 @@
-import {app} from '@root/bootstrap/app'
+import { app } from "@root/bootstrap/app";
 
-export const Route = app.resolve('router')
+export const Route = app.resolve("router");
