@@ -4,7 +4,9 @@ import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
 export default defineConfig({
 	plugins: [
-		lantern(),
+		lantern({
+			input: "assets/js/app.ts",
+		}),
 		tailwindcss(),
 		vue({
 			template: {
