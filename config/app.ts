@@ -1,0 +1,5 @@
+export default {
+	name: "Lantern",
+	env: env("APP_ENV", "production"),
+	debug: env("APP_DEBUG", "false") === "true",
+};
