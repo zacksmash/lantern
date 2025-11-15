@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { Deferred, Link } from "@inertiajs/vue3";
+import { Link } from "@inertiajs/vue3";
 defineProps<{
   title: string;
   message: string;
-  deferred?: string;
 }>();
 </script>
 
@@ -12,13 +11,9 @@ defineProps<{
     <h1 class="text-3xl font-semibold text-slate-900">{{ title }}</h1>
     <p class="text-slate-600">{{ message }}</p>
     <Link
-      href="/about"
-      class="mt-4 text-blue-500 hover:underline"
-      >Go to About</Link
-    >
-    <Deferred data="deferred">
-      <template #fallback>Waiting...</template>
-      <p class="mt-4 text-green-500">Deferred: {{ deferred }}</p>
-    </Deferred>
+      href="/"
+      class="mt-4 text-blue-500 hover:underline">
+      Go to Home
+    </Link>
   </div>
 </template>
