@@ -44,10 +44,7 @@ const select = async (query: string, bindings: BindingArray = []) => {
 	return await runQuery(connection(), query, bindings);
 };
 
-const selectOne = async (
-	query: string,
-	bindings: BindingArray = [],
-) => {
+const selectOne = async (query: string, bindings: BindingArray = []) => {
 	const rows = (await select(query, bindings)) as unknown[];
 	return rows[0] ?? null;
 };

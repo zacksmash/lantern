@@ -67,4 +67,4 @@ Everything is request-aware thanks to `RequestContext`.
 - `HandleError` turns `ValidationException` into JSON 422 responses, bubbles errors in development, and emits a generic 500 in production unless you add middleware to override it.
 - Middleware can wrap `await next()` in try/catch to render custom error pages or log exceptions before they reach `HandleError`.
 
-This snapshot should keep Codex aligned with the current framework state whenever you modify or extend Lantern.***
+This snapshot should keep Codex aligned with the current framework state whenever you modify or extend Lantern.\*\*\*
