@@ -8,6 +8,8 @@
 		"jsx": "react-jsx",
 		"allowJs": true,
 		"types": ["bun-types/test-globals", "@types/bun", "vite/client"],
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true,
 		"paths": {
 			"@/*": ["./assets/js/*"],
 			"@app/*": ["./app/*"],

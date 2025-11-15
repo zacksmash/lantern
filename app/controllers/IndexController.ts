@@ -1,8 +1,10 @@
+import type { HttpRequest } from "@core/Http/Request";
+
 export class IndexController {
-	invoke(): Response {
-		return new Response(`<div>Hello, world!</div>`, {
-			headers: { "Content-Type": "text/html" },
-			status: 200,
+	async invoke(_request: HttpRequest): Promise<Response> {
+		return inertia("Index", {
+			title: "Lantern",
+			message: "Welcome to your new framework!",
 		});
 	}
 }

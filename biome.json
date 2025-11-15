@@ -7,7 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**", "!assets/*"]
+		"includes": ["**", "!assets/*", "!node_modules/*", "!@core/Vite"]
 	},
 	"formatter": {
 		"enabled": true,
@@ -29,8 +29,16 @@
 		}
 	},
 	"javascript": {
+		"parser": {
+			"unsafeParameterDecoratorsEnabled": true
+		},
 		"formatter": {
 			"quoteStyle": "double"
+		}
+	},
+	"html": {
+		"parser": {
+			"interpolation": true
 		}
 	},
 	"css": {

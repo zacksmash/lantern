@@ -1,4 +1,4 @@
-import type { Application } from "@core/Application";
+import type { Application } from "@core/Application/Application";
 import type { Container } from "@core/Container";
 
 export type ProviderConstructor = new (app: Application) => ServiceProvider;
@@ -10,6 +10,6 @@ export abstract class ServiceProvider {
 		this.container = app.getContainer();
 	}
 
-	register(): void {}
-	boot(): void {}
+	register(): void | Promise<void> {}
+	boot(): void | Promise<void> {}
 }

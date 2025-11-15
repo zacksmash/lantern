@@ -1,4 +1,4 @@
-import { HandleError, HandleResponse } from "@core/ProcessRequest";
+import { HandleError, HandleResponse } from "@core/Application/ProcessRequest";
 
 Bun.serve({
 	development: process.env.APP_ENV === "development",

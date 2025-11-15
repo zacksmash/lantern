@@ -1,3 +1,7 @@
-import { Application } from "@core/Application";
+import { Application } from "@core/Application/Application";
 
-export const app = new Application().configure(process.cwd()).create();
+const application = new Application();
+await application.configure(process.cwd());
+application.create();
+
+export const app = application;
