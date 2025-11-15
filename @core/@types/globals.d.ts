@@ -8,6 +8,7 @@ declare global {
 	var cache: typeof import("@core/Support/Facades/Cache")["cache"];
 	var session: typeof import("@core/Support/Facades/Session")["session"];
 	var db: typeof import("@core/Support/Facades/DB")["db"];
+	var mason: typeof import("@core/Support/Facades/Mason")["mason"];
 }
 
 export {};

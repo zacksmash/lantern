@@ -1,6 +1,6 @@
 # Database
 
-Lantern’s database layer intentionally mirrors Laravel’s “DB” documentation: configure named connections, run raw queries via a fluent facade, and manage transactions with familiar helpers. There’s no ORM yet, but the foundations feel identical.
+Lantern’s database layer intentionally mirrors Laravel’s “DB” documentation: configure named connections, run raw queries via a fluent facade, and manage transactions with familiar helpers. When you want Active Record style models, reach for [Mason](./mason.md) – it builds on the same manager and adopts Laravel’s API in TypeScript.
 
 ## Configuration
 

@@ -11,9 +11,9 @@ defineProps<{
     <h1 class="text-3xl font-semibold text-slate-900">{{ title }}</h1>
     <p class="text-slate-600">{{ message }}</p>
     <Link
-      href="/"
+      href="/redirect"
       class="mt-4 text-blue-500 hover:underline">
-      Go to Home
+      Redirect Home
     </Link>
   </div>
 </template>

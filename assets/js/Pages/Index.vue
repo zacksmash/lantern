@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import { Deferred, Link } from "@inertiajs/vue3";
+import { Link, router } from "@inertiajs/vue3";
 defineProps<{
   title: string;
   message: string;
   deferred?: string;
 }>();
+
+function getOptional() {
+  router.reload({
+    only: ["deferred"],
+  });
+}
 </script>
 
 <template>
@@ -16,9 +22,8 @@ defineProps<{
       class="mt-4 text-blue-500 hover:underline"
       >Go to About</Link
     >
-    <Deferred data="deferred">
-      <template #fallback>Waiting...</template>
-      <p class="mt-4 text-green-500">Deferred: {{ deferred }}</p>
-    </Deferred>
+    <Button @click="getOptional"> Get Optional </Button>
+
+    <p>{{ deferred }}</p>
   </div>
 </template>
