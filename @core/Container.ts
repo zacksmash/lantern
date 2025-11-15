@@ -1,19 +1,24 @@
 import { getDesignParamTypes, getParamTokens } from "@core/Container/Metadata";
 
-export type Token<T = any> = string | symbol | Constructor<T>;
-
-type Constructor<T = any> = new (...args: any[]) => T;
-type Factory<T> = () => T;
-type FactoryLike<T> = Factory<T> | Constructor<T>;
+export type Constructor<T = unknown> = new (...args: any[]) => T;
+export type Token<T = unknown> = string | symbol | Constructor<T>;
+export type Factory<T> = () => T;
+export type FactoryLike<T> = Factory<T> | Constructor<T>;
+type AnyToken = Token<unknown>;
+type AnyFactory = Factory<unknown>;
+type ScopeMap = Map<AnyToken, unknown>;
+type InjectableConstructor<T = unknown> = Constructor<T> & {
+	inject?: Token[];
+};
 
 export class Container {
-	protected bindings = new Map<Token, Factory<any>>();
-	protected singletons = new Map<Token, Factory<any>>();
-	protected singletonInstances = new Map<Token, any>();
-	protected instances = new Map<Token, any>();
-	protected scopedBindings = new Map<Token, Factory<any>>();
-	private resolving = new Set<Token>();
-	private scopeStack: Map<Token, any>[] = [];
+	protected bindings = new Map<AnyToken, AnyFactory>();
+	protected singletons = new Map<AnyToken, AnyFactory>();
+	protected singletonInstances = new Map<AnyToken, unknown>();
+	protected instances = new Map<AnyToken, unknown>();
+	protected scopedBindings = new Map<AnyToken, AnyFactory>();
+	private resolving = new Set<AnyToken>();
+	private scopeStack: ScopeMap[] = [];
 
 	bind<T>(identifier: Token<T>, factory: FactoryLike<T>): void {
 		this.bindings.set(identifier, this.normalizeFactory(factory));
@@ -42,22 +47,22 @@ export class Container {
 
 	resolve<T>(identifier: Token<T>): T {
 		if (this.instances.has(identifier)) {
-			return this.instances.get(identifier);
+			return this.instances.get(identifier) as T;
 		}
 
 		if (this.singletonInstances.has(identifier)) {
-			return this.singletonInstances.get(identifier);
+			return this.singletonInstances.get(identifier) as T;
 		}
 
 		if (this.singletons.has(identifier)) {
-			const factory = this.singletons.get(identifier)!;
+			const factory = this.singletons.get(identifier)! as Factory<T>;
 			const instance = this.invokeFactory(factory);
 			this.singletonInstances.set(identifier, instance);
 			return instance;
 		}
 
 		if (this.bindings.has(identifier)) {
-			const binding = this.bindings.get(identifier)!;
+			const binding = this.bindings.get(identifier)! as Factory<T>;
 			return this.invokeFactory(binding);
 		}
 
@@ -96,7 +101,7 @@ export class Container {
 		try {
 			const dependencies = this.resolveDependencies(ctor);
 			const resolvedDependencies = dependencies.map((token) =>
-				this.resolve(token),
+				this.resolve(token as Token<unknown>),
 			);
 			return new ctor(...resolvedDependencies);
 		} finally {
@@ -105,7 +110,7 @@ export class Container {
 	}
 
 	runScope<T>(callback: () => T | Promise<T>): Promise<T> | T {
-		this.scopeStack.push(new Map());
+		this.scopeStack.push(new Map<AnyToken, unknown>());
 		const finalize = () => {
 			this.scopeStack.pop();
 		};
@@ -124,8 +129,8 @@ export class Container {
 	}
 
 	private resolveDependencies<T>(ctor: Constructor<T>): Token[] {
-		if ((ctor as any).inject) {
-			return (ctor as any).inject;
+		if (hasInjectTokens(ctor)) {
+			return ctor.inject ?? [];
 		}
 
 		const paramTokens = getParamTokens(ctor);
@@ -167,10 +172,10 @@ export class Container {
 		}
 
 		if (scope.has(identifier)) {
-			return scope.get(identifier);
+			return scope.get(identifier) as T;
 		}
 
-		const factory = this.scopedBindings.get(identifier)!;
+		const factory = this.scopedBindings.get(identifier)! as Factory<T>;
 		const instance = this.invokeFactory(factory);
 		scope.set(identifier, instance);
 		return instance;
@@ -178,5 +183,13 @@ export class Container {
 }
 
 const isConstructor = <T>(value: unknown): value is Constructor<T> => {
-	return typeof value === "function" && !!(value as Constructor).prototype;
+	return (
+		typeof value === "function" && Boolean((value as Constructor).prototype)
+	);
+};
+
+const hasInjectTokens = <T>(
+	ctor: Constructor<T>,
+): ctor is InjectableConstructor<T> => {
+	return Array.isArray((ctor as InjectableConstructor<T>).inject);
 };

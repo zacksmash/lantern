@@ -1,53 +1,69 @@
-# Configuration, Env & Global Helpers
+# Configuration, Environment & Globals
 
-Lantern exposes Laravel-style helpers so you can read configuration or build responses anywhere without tedious imports.
+Lantern inherits Laravel’s philosophy around configuration and global helpers. All configuration lives in `config/*.ts`, helpers are registered early, and environment variables flow through a dedicated `env()` utility.
 
-## Environment variables
-- `@core/Env.ts` defines a tiny `Env` helper. `env(key, fallback?)` reads from `process.env`, throws if missing, and is bound to `globalThis.env` during bootstrap.
-- Use `env("APP_ENV", "development")` in config files to branch per environment.
+## Environment Helper
 
-## Configuration loader
-- `@core/Config.ts` loads every `config/*.ts` module once on startup via `config.load()` (called in `@core/Globals.ts`). The default export (or module itself) should be a plain object.
-- Environment overrides: create files like `config/app.production.ts`. When `NODE_ENV` is set, Lantern merges `<name>.<env>.ts` over the base config deep-recursively.
-- Helpers: `config("app.name")` reads nested keys and is registered globally on `globalThis.config`.
-- Caching: `config.cacheToFile()` writes the merged object to `storage/config.cache.json`. `config.loadFromCache()` skips `require` calls — ideal for production deploys.
+`@core/Env.ts` exports `env(key: string, fallback?: string)` and registers it as `globalThis.env`:
+
+- Reads straight from `process.env`.
+- Throws when required keys are missing (no fallback supplied).
+- Normalizes newlines for multi-line secrets.
+
+Use it inside config files or providers just as you would in Laravel:
 
 ```ts
-// config/app.ts
 export default {
 	name: env("APP_NAME", "Lantern"),
+	env: env("APP_ENV", "development"),
 	url: env("APP_URL", "http://localhost:3000"),
-	timezone: "UTC",
-};
-
-// config/app.production.ts
-export default {
-	timezone: "America/New_York",
 };
 ```
 
-## Global response helpers
-`@core/Globals.ts` runs before `HttpKernel` handles traffic. It registers:
-- `globalThis.route` — proxy to the `UrlGenerator` (see `routing.md`).
-- `globalThis.inertia` — renders Inertia responses (see `inertia.md`).
-- `globalThis.view` — renders Blade-like templates (see `views.md`).
+## Config Loader
 
-Because globals are set as early as possible, controllers, middleware, and even service providers can call these helpers without additional imports.
+`@core/Config.ts` handles loading and caching:
+
+- Loads every `config/*.ts` module once during bootstrap (see `@core/Globals.ts`).
+- Supports per-environment overrides (`config/app.production.ts`, etc.) merged on top of the base file.
+- Provides a dot-notation `config("app.name")` helper registered on `globalThis.config`.
+- Offers `config.cacheToFile()` / `config.loadFromCache(path?)` to warm config for production deployments.
+
+### Example Override
+
+```
+config/
+  app.ts
+  app.production.ts
+```
+
+`app.production.ts` can override any nested value (timeouts, logging levels, etc.) when `NODE_ENV=production`.
+
+## Global Helpers
+
+`@core/Globals.ts` registers a handful of helpers on `globalThis` before the HTTP kernel runs:
+
+| Helper | Description |
+| --- | --- |
+| `config(path, fallback?)` | Resolve configuration values. |
+| `env(key, fallback?)` | Shortcut to `Env.get`. |
+| `route(name, params?, absolute?)` | Proxy to the URL generator. |
+| `inertia(component, props?, options?)` | Render an Inertia response using the current request. |
+| `view(name, data?, options?)` | Render HTML using the `ViewEngine`. |
+
+Because these helpers live on the global object, controllers, middleware, service providers, and tests can call them without manual imports, mirroring Laravel’s developer experience.
+
+## Caching Configuration
+
+For production builds you can serialize the loaded configuration:
 
 ```ts
-// app/controllers/ProfileController.ts
-import type { HttpRequest } from "@core/Http/Request";
+// bootstrap/cache-config.ts
+import { Config } from "@core/Config";
 
-export class ProfileController {
-	async show(request: HttpRequest) {
-		const user = await request.validate({ id: "required|integer" });
-		return inertia("Profile/Show", {
-			user,
-			settingsUrl: () => route("settings.edit", { user: user.id }),
-		});
-	}
-}
-
-// Anywhere else
-const appName = config("app.name");
+new Config().load(process.cwd()).cacheToFile();
 ```
+
+Later, call `config.loadFromCache()` to avoid touching the filesystem for every `config()` call—similar to `php artisan config:cache`.
+
+Lantern’s configuration layer aims to be unmistakably Laravel: environment-driven values, dot-notation lookups, optional caching, and expressive helpers available across your application.***

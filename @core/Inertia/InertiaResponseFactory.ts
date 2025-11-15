@@ -14,6 +14,9 @@ import { ViteAssetTagGenerator } from "@core/Vite/AssetTagGenerator";
 type PartialKeys = Set<string> | null;
 
 const MERGE_INTENT_HEADER = "X-Inertia-Infinite-Scroll-Merge-Intent";
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+};
 
 interface RenderMetadata {
 	deferred: Map<string, string[]>;
@@ -92,7 +95,7 @@ export class InertiaResponseFactory {
 			match: new Set(),
 			scroll: {},
 		};
-		const resolved: Record<string, any> = {};
+		const resolved: Record<string, unknown> = {};
 
 		for (const [key, rawValue] of Object.entries(props)) {
 			const descriptor = this.normalizeDescriptor(rawValue);
@@ -176,7 +179,7 @@ export class InertiaResponseFactory {
 		if (typeof value === "function") {
 			return {
 				kind: "value",
-				resolver: value as (request: HttpRequest) => any,
+				resolver: value as (request: HttpRequest) => unknown,
 			};
 		}
 
@@ -221,7 +224,7 @@ export class InertiaResponseFactory {
 	private applyPropMetadata(
 		key: string,
 		descriptor: PropDescriptor,
-		value: any,
+		value: unknown,
 		metadata: RenderMetadata,
 		mergeIntent: "append" | "prepend" | null,
 		request: HttpRequest,
@@ -281,7 +284,7 @@ export class InertiaResponseFactory {
 
 	private buildScrollMetadata(
 		_key: string,
-		value: any,
+		value: unknown,
 		options: ScrollOptions,
 		request: HttpRequest,
 		mergeIntent: "append" | "prepend" | null,
@@ -313,23 +316,36 @@ export class InertiaResponseFactory {
 		};
 	}
 
-	private extractPaginationInfo(value: any, pageName: string) {
-		const meta = value?.meta ?? {};
-		const links = value?.links ?? {};
-		const currentPage =
-			meta.current_page ??
-			meta.currentPage ??
-			value?.current_page ??
-			value?.currentPage ??
+	private extractPaginationInfo(value: unknown, pageName: string) {
+		const record: Record<string, unknown> = isRecord(value) ? value : {};
+		const metaSource: Record<string, unknown> = isRecord(record.meta)
+			? record.meta
+			: {};
+		const linksSource: Record<string, unknown> = isRecord(record.links)
+			? record.links
+			: {};
+		const rawCurrent =
+			metaSource.current_page ??
+			metaSource.currentPage ??
+			record.current_page ??
+			record.currentPage ??
 			null;
+		const currentPage = this.coercePageValue(rawCurrent);
+		const rawNextLink =
+			typeof linksSource.next === "string"
+				? linksSource.next
+				: (record.next_page_url as string | undefined);
+		const rawPrevLink =
+			typeof linksSource.prev === "string"
+				? linksSource.prev
+				: (record.prev_page_url as string | undefined);
+
 		const nextPage =
-			meta.next_page ??
-			meta.nextPage ??
-			this.extractPageNumber(links.next ?? value?.next_page_url, pageName);
+			this.coercePageValue(metaSource.next_page ?? metaSource.nextPage) ??
+			this.extractPageNumber(rawNextLink, pageName);
 		const previousPage =
-			meta.prev_page ??
-			meta.prevPage ??
-			this.extractPageNumber(links.prev ?? value?.prev_page_url, pageName);
+			this.coercePageValue(metaSource.prev_page ?? metaSource.prevPage) ??
+			this.extractPageNumber(rawPrevLink, pageName);
 
 		return { currentPage, nextPage, previousPage };
 	}
@@ -363,6 +379,18 @@ export class InertiaResponseFactory {
 		if (params.has("page")) return "page";
 		const first = params.keys().next();
 		return first.done ? "page" : first.value;
+	}
+
+	private coercePageValue(value: unknown): number | string | null {
+		if (typeof value === "number" && !Number.isNaN(value)) {
+			return value;
+		}
+
+		if (typeof value === "string") {
+			return value;
+		}
+
+		return null;
 	}
 
 	private applyMetadata(page: InertiaPage, metadata: RenderMetadata) {

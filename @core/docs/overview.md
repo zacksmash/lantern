@@ -1,29 +1,54 @@
 # Lantern Overview
 
-Lantern is a Bun-first, Laravel-inspired full-stack framework. It pairs Bun's HTTP server with an IoC container, an Inertia + Vue frontend, and a Vite-powered asset pipeline so you can build modern web apps without leaving TypeScript.
+Lantern is a Bun-native, Laravel-flavoured framework that keeps the DX of Laravel while staying entirely in TypeScript. This document mirrors the cadence of the Laravel docs so you can quickly map familiar ideas to their Lantern counterparts.
 
-## How requests flow
-1. `bun run start` runs both Bun (`lantern.ts`) and Vite. Bun boots `HandleResponse` / `HandleError` from `@core/Application/ProcessRequest`.
-2. `HandleResponse` wraps each inbound Fetch `Request` in a custom `HttpRequest`, stores it in `RequestContext` (AsyncLocalStorage), then executes `HttpKernel` inside a per-request container scope (`app.getContainer().runScope`).
-3. `HttpKernel` ( `@core/Http/Kernel.ts`) checks for `storage/app/.maintenance`, streams static files from `public`, assembles middleware (global + per-route), and finally delegates to `app.handleRequest`.
-4. `Application` owns the IoC container, loads service providers (framework + your `bootstrap/providers.ts`), and exposes `handleRequest`, which dispatches the request through the router.
-5. `Router` locates the matching route, instantiates controllers via the container, resolves middleware aliases/groups, and invokes your controller/method/function.
-6. Controllers typically return an Inertia or view response, which renders through `InertiaResponseFactory` or the `ViewEngine`, injecting Vite assets and HTML shells as needed.
+## Architecture At A Glance
 
-## Key directories
-- `@core/*` — framework runtime (container, routing, HTTP kernel, views, Vite integration, etc.).
-- `app/controllers` — HTTP controllers (`invoke` methods or class methods). Decorate classes with `@Injectable()` if they need constructor injection.
-- `app/providers` — custom service providers that register/boot bindings (export them from `bootstrap/providers.ts`).
-- `routes/index.ts` — define routes using the `Route` facade (`Route.get(...)`, groups, middleware, resources, etc.).
-- `config/*.ts` — configuration modules loaded globally via the `config()` helper. Use `config/app.development.ts` to override per environment.
-- `assets/js` & `assets/css` — SPA entry points (Vue 3 + Inertia + Tailwind). Vite compiles these into `public/build`.
-- `resources/views` — Blade-like HTML templates rendered by the `view()` helper.
-- `storage/app` — writable directories for maintenance flags, caches, future disks.
+1. **Bootstrap** – `lantern.ts` boots the application and registers framework + project service providers from `bootstrap/providers.ts`.
+2. **HTTP entry** – Every inbound Fetch `Request` flows through `HandleResponse` / `HandleError` (`@core/Application/ProcessRequest.ts`). A custom `HttpRequest` instance is stashed inside `RequestContext` (an AsyncLocalStorage) and the container spins up a per-request scope.
+3. **Kernel** – `HttpKernel` (`@core/Http/Kernel.ts`) checks for maintenance mode, opportunistically streams static files from `public`, then executes the middleware stack (global → route) before dispatching to `Application.handleRequest`.
+4. **Routing** – The `Router` matches the request, resolves controllers via the IoC container, and invokes controller methods, `invoke` handlers, or closures. Middleware aliases, groups, and prefixes are handled just like Laravel.
+5. **Responses** – Controllers usually return Inertia responses or rendered views. `InertiaResponseFactory` builds JSON or the HTML shell, while the `ViewEngine` renders plain HTML with optional Vite asset tags.
 
-## Frontend overview
-- `assets/js/app.ts` bootstraps `createInertiaApp` and lazy-loads Vue pages from `assets/js/Pages` (update the glob when adding folders).
-- Tailwind CSS v4 is configured via `assets/css/app.css` and `@tailwindcss/vite` in `vite.config.ts`.
-- `assets/index.html` is the HTML shell consumed by both SSR-less renders and Inertia. It contains `@vite`/`@inertia` placeholders replaced on the server.
+## Directory Structure
+
+| Path | Description |
+| --- | --- |
+| `@core/*` | Framework source (container, kernel, routing, cache, session, auth, etc.). |
+| `app/controllers` | HTTP controllers. Use `@Injectable()` when constructor injection is needed. |
+| `app/middleware` | Custom middleware classes registered in `@core/Http/Middleware/Manifest.ts`. |
+| `app/providers` | Application service providers exported from `bootstrap/providers.ts`. |
+| `config/*.ts` | Configuration files loaded via `config()`/`globalThis.config`. Supports per-environment overrides (`config/app.development.ts`). |
+| `routes/index.ts` | Main route file. Use the `Route` facade for fluent definitions. |
+| `resources/views` | HTML templates rendered by the `view()` helper. |
+| `assets/js` and `assets/css` | Inertia + Vue SPA entry points compiled by Vite. |
+| `storage/app` | Runtime storage (maintenance mode flag, cache artifacts, uploads, etc.). |
+
+## Request Lifecycle
+
+```mermaid
+graph TD
+  A[Fetch Request] --> B[HandleResponse]
+  B --> C[RequestContext + Container Scope]
+  C --> D[HttpKernel]
+  D -->|Static file?| E[Stream from /public]
+  D -->|Otherwise| F[Middleware Pipeline]
+  F --> G[Router]
+  G --> H[Controller / Closure]
+  H --> I[Response (Inertia/View/JSON)]
+```
+
+### RequestContext
+Lantern’s `RequestContext` is the equivalent of Laravel’s request singleton. Any code path can call `RequestContext.get()` (or helpers like `inertia()`) to access the current request inside the active AsyncLocalStorage scope.
+
+### Middleware Pipeline
+Global middleware live in `@core/Http/Middleware/Manifest.ts`. Route middleware are registered there as aliases and composed via `Route.middleware`, `Route.group`, and the `Route` facade helpers.
+
+## Frontend Stack
+
+- **Inertia + Vue 3** – `assets/js/app.ts` bootstraps Inertia and auto-registers Vue page components from `assets/js/Pages`.
+- **Tailwind CSS v4** – Configured through `assets/css/app.css` with the `@tailwindcss/vite` plugin.
+- **Vite HTML shell** – `assets/index.html` provides the HTML skeleton. The server replaces `@vite` markers with generated asset tags, similar to Laravel’s Vite integration.
 
 ```ts
 // assets/js/app.ts
@@ -41,33 +66,13 @@ createInertiaApp({
 });
 ```
 
-## Running the stack
+## Local Development
+
 ```bash
 bun install
-bun run start   # concurrently launches Bun + Vite for local dev
-bun run build   # builds production assets to public/build
-bun run serve   # serves requests (expects assets built already)
+bun run start   # boots Bun + Vite concurrently
+bun run lint    # biome + prettier
+bun run test    # bun test
 ```
 
-```ts
-// app/controllers/IndexController.ts
-import type { HttpRequest } from "@core/Http/Request";
-
-export class IndexController {
-	async invoke(request: HttpRequest) {
-		const query = request.query();
-		return inertia("Home", {
-			message: "Welcome to Lantern!",
-			q: query.q ?? null,
-		});
-	}
-}
-
-// routes/index.ts
-import { Route } from "@core/Routing/Facades/Route";
-import { IndexController } from "@app/controllers/IndexController";
-
-Route.get("/", IndexController).name("home");
-```
-
-Use the docs in this folder to dive deeper into every subsystem before extending the framework.
+Lantern mirrors Laravel’s developer ergonomics: conventions live under `config`, services are bound through providers, middleware is expressive, and Blade-like views or Inertia responses keep UI rendering consistent. Use the rest of this documentation set to dive into the individual systems.***

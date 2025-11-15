@@ -2,8 +2,10 @@ import { join } from "node:path";
 import { TemplateLoader } from "@core/View/TemplateLoader";
 import { ViteAssetTagGenerator } from "@core/Vite/AssetTagGenerator";
 
-const escapeHtml = (value: any) =>
-	String(value)
+type ViewData = Record<string, unknown>;
+
+const escapeHtml = (value: unknown) =>
+	String(value ?? "")
 		.replace(/&/g, "&amp;")
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;")
@@ -22,7 +24,7 @@ export class ViewEngine {
 		private assets: ViteAssetTagGenerator = new ViteAssetTagGenerator(),
 	) {}
 
-	async render(view: string, data: Record<string, any> = {}): Promise<string> {
+	async render(view: string, data: ViewData = {}): Promise<string> {
 		const filePath = this.resolveViewPath(view);
 		const template = await this.loader.load(filePath);
 		const withVite = await this.injectVite(template);
@@ -39,7 +41,7 @@ export class ViewEngine {
 		return template.replace(/@vite/g, tags);
 	}
 
-	private injectVariables(template: string, data: Record<string, any>): string {
+	private injectVariables(template: string, data: ViewData): string {
 		return template.replace(/{{\s*([\w.-]+)\s*}}/g, (_match, key: string) => {
 			if (Object.hasOwn(data, key)) {
 				return escapeHtml(data[key]);

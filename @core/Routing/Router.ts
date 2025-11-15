@@ -224,7 +224,7 @@ export class Router {
 		if (Array.isArray(action)) {
 			const [Controller, method] = action;
 			const instance = this.instantiate(Controller);
-			const handler = instance[method];
+			const handler = (instance as unknown as Record<string, unknown>)[method];
 
 			if (typeof handler !== "function") {
 				throw new Error(
@@ -420,7 +420,7 @@ const mergeMiddleware = (
 	return merged.length ? merged : undefined;
 };
 
-type Constructor<T = any> = new (...args: any[]) => T;
+type Constructor<T = unknown> = new (...args: any[]) => T;
 
 const isControllerConstructor = (
 	action: RouteAction,

@@ -10,7 +10,7 @@ export class RoutingServiceProvider extends ServiceProvider {
 		});
 
 		this.app.singleton(ContainerTokens.UrlGenerator, () => {
-			const router = this.app.resolve(ContainerTokens.Router) as Router;
+			const router = this.app.resolve(ContainerTokens.Router);
 			const baseUrl = env("APP_URL", "http://localhost:3000");
 			return new UrlGenerator(router, baseUrl);
 		});

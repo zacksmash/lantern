@@ -1,9 +1,16 @@
 import type { Middleware } from "@core/Http/Middleware/Contracts";
 import type { HttpRequest } from "@core/Http/Request";
 
-export type MiddlewareConstructor = new () => Middleware;
+export type MiddlewareConstructor = new (...args: any[]) => Middleware;
 export type MiddlewareIdentifier = MiddlewareConstructor | string;
-export type ControllerConstructor = new (...args: any[]) => any;
+export interface ControllerContract {
+	invoke(request: HttpRequest): Response | Promise<Response>;
+}
+export type ControllerConstructor<
+	TController extends ControllerContract = ControllerContract,
+> = new (
+	...args: any[]
+) => TController;
 
 export type RouteCallable = (
 	request: HttpRequest,

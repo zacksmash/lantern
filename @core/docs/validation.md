@@ -1,69 +1,81 @@
 # Validation
 
-Lantern ships a server-side validator that mirrors Laravel's API for common rules. Use it from controllers, services, or middleware via `await request.validate(rules)`.
+Lantern’s validator mirrors Laravel’s rule syntax and error handling. Use it via `await request.validate(rules)` or by importing `Validator.validate(data, rules)`.
 
-## Built-in rules
-| Rule | Behavior |
-| ---- | -------- |
-| `required` | Ensures the value exists and is not empty. |
-| `nullable` | Allows missing/empty values and casts them to `null`, then stops further rules. |
+## Available Rules
+
+| Rule | Description |
+| --- | --- |
+| `required` | Value must be present and not empty. |
+| `nullable` | Allows empty values, casts them to `null`, and stops further rules. |
 | `string` | Requires a string. |
-| `number` | Accepts numeric strings/numbers and casts to `number`. |
-| `integer` | Casts to number and ensures it is an integer. |
-| `boolean` | Accepts booleans, `"true"/"false"`, `"1"/"0"`, or `1/0`, casting to a boolean. |
+| `number` | Accepts numeric strings/numbers and casts to a number. |
+| `integer` | Ensures the numeric value is an integer. |
+| `boolean` | Accepts booleans, `"true"/"false"`, `"1"/"0"`, `1/0`. |
 | `array` | Requires an array. |
-| `email` | Validates against a simple email regex. |
-| `min:value` | Checks numeric value or string/array length. |
-| `max:value` | Checks numeric value or string/array length. |
-| `in:foo,bar` | Restricts values to the provided list (whitespace trimmed). |
-| `regex:/pattern/flags` | Applies the provided regex (with or without slashes).
+| `email` | Validates basic email syntax. |
+| `min:value` / `max:value` | For numbers or string/array length. |
+| `in:foo,bar` | Restricts to the provided options. |
+| `regex:/pattern/flags` | Applies a custom regular expression. |
 
-## Using the validator
+Combine rules with pipes (`"required|string|max:255"`) or arrays (`["required", "integer"]`).
+
+## Custom Rules
+
+Rules can be functions receiving `(value, field, data)` and returning:
+
+- `true`/`undefined` – validation passes.
+- `false` – fails with a generic message.
+- `string` – fails with the provided message.
+- `{ valid, value?, message?, stop? }` – full control (convert values, stop further rules, etc.).
+
+Async functions are supported, so you can hit databases or APIs during validation.
+
+## Request Helper
+
 ```ts
 const data = await request.validate({
-  name: "required|string|max:255",
-  age: ["required", "integer", "min:18"],
-  email: "nullable|email",
-  role: (value) => value === "admin" || "Role must be admin.",
+	name: "required|string|max:255",
+	email: "required|email",
+	age: "nullable|integer|min:18",
 });
 ```
-- Rules can be strings (`"required|string"`) or arrays. Arrays may mix strings and callbacks.
-- Callback rules receive `(value, field, data)` and can return:
-  - `true`/`undefined` to pass,
-  - `false` or a string message to fail,
-  - `{ valid, value?, message?, stop? }` for advanced control.
-- Validated values (including casts from number/boolean/integer rules) are returned in a nested object that matches your field keys (dot notation supported).
+
+The helper merges query + body data (`request.all()`), runs the validator, and returns the sanitized payload. Failures throw `ValidationException`, which `HandleError` converts into a `422` JSON response (`{ message, errors }`).
+
+## Dot Notation & Wildcards
+
+Use dot notation to validate nested objects, and `*` for wildcard indices:
 
 ```ts
 const payload = await request.validate({
-	"name.first": "required|string",
-	"name.last": "required|string",
-	"profile.bio": "nullable|string|max:200",
-	tags: "array",
-	"tags.*": (value) =>
-		value.length <= 20 || "Each tag must be 20 characters or fewer.",
+	"user.name": "required|string",
+	"user.email": "required|email",
+	"tags.*": "string|max:20",
 });
 ```
 
-## Error handling
-- Failures throw `ValidationException` (`@core/Validation/ValidationException.ts`). `HandleError` in production converts this into `422` JSON: `{ message, errors }`.
-- During development, Lantern still throws the exception so Bun prints stack traces.
+The returned object mirrors your nested structure.
 
-## Tips
-- Combine `nullable` with other rules to allow optional fields.
-- Use custom callbacks to integrate async validation (lookups, API checks). Return a promise from your resolver and `await request.validate` will handle it.
-- Structure nested payloads with dot notation (`"address.street"`) so the validator can build nested objects automatically.
+## Standalone Usage
 
 ```ts
 import { Validator } from "@core/Validation/Validator";
 
-export const validateInvitation = async (data: Record<string, any>) => {
+export const validateInvitation = (data: Record<string, unknown>) => {
 	return Validator.validate(data, {
 		email: "required|email",
 		token: async (value) => {
 			const exists = await Invitation.findByToken(value);
-			return exists || "Invitation token is invalid.";
+			return exists || "Invalid invitation token.";
 		},
 	});
 };
 ```
+
+## Error Handling
+
+- Validation failures throw `ValidationException`. Catch it manually if you need custom responses, or let `HandleError` respond with JSON.
+- During development Lantern rethrows errors so you can inspect stack traces.
+
+Lantern’s validation layer is intentionally Laravel-like, so migrating rules or reusing mental models is effortless.***

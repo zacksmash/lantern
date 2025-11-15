@@ -1,72 +1,84 @@
-# HttpRequest & Request Context
+# Requests
 
-`@core/Http/Request.ts` wraps Bun’s Fetch `Request` with Laravel-like helpers so controllers and middleware can read input without re-parsing bodies.
+Lantern wraps Bun’s Fetch API in an `HttpRequest` class that feels like Laravel’s request object: cached bodies, convenient helpers, and access to sessions, cookies, and the authenticated user.
 
-## Core accessors
-- `request.method` — uppercase HTTP method.
-- `request.urlInstance` — the native `URL` for advanced parsing.
-- `request.path()` — normalized path (`/` has no trailing slash).
-- `request.header(name)` / `request.headers()` — read headers.
+## Core APIs
 
-## Query parameters
-- `request.query()` returns a `Record<string, string | string[]>` with duplicate keys promoted to arrays.
-- `request.query("page", "1")` reads an individual key.
+| Helper | Description |
+| --- | --- |
+| `request.method` | Uppercase HTTP verb. |
+| `request.urlInstance` | Native `URL` object for advanced parsing. |
+| `request.path()` | Normalized path without trailing slashes. |
+| `request.header(name)` / `request.headers()` | Read headers. |
 
-## Body helpers
-The body is parsed once and cached per request.
-- `await request.json()` or `request.body()` – returns JSON, form-urlencoded, or multipart data as plain objects. File uploads are surfaced as `File` instances when using multipart forms.
-- `await request.all()` – merges query + body (body wins when keys collide).
-- `await request.input()` – returns the merged payload, or `await request.input("email")` for a single key with optional fallback.
+### Query Parameters
 
 ```ts
-export class UploadController {
-	async store(request: HttpRequest) {
-		const body = await request.body<{ avatar: File; bio: string }>();
-		const params = request.params();
-		const all = await request.all();
-
-		console.log(request.method, request.path());
-		console.log("User:", params.userId);
-		console.log("Form data:", all);
-
-		return new Response(`Uploaded ${body.avatar.name} successfully`);
-	}
-}
+request.query(); // Record<string, string | string[]>
+request.query("page", "1"); // single value with fallback
 ```
 
-## Route data
-- `request.params()` exposes route parameters populated by the router.
-- `request.route()` returns the matched `Route` instance, or `null` if none matched.
-- `request.getRouteMatch()`/`assignRouteMatch()` are used internally to cache matches.
+Duplicate keys are promoted to arrays automatically.
 
-## Validation shortcut
-- `await request.validate(rules)` runs the Validator (see `validation.md`) on the merged payload and returns sanitized values. Failed validations throw `ValidationException` and automatically produce a JSON `422`.
+### Body Helpers
+
+The body is parsed once and cached:
+
+- `await request.json()` / `request.body()` – returns JSON, form-urlencoded, or multipart payloads as plain objects (multipart files remain `File` instances).
+- `await request.all()` – merges query + body (body wins on conflicts).
+- `await request.input()` – returns the merged payload, or `await request.input("email", "guest@example.com")` for a single key.
 
 ```ts
-const data = await request.validate({
+const data = await request.input<{ name: string; avatar?: File }>();
+```
+
+### Route Data
+
+`request.params()` exposes route parameters, and `request.route()` returns the matched `Route` instance. Internally Lantern caches matches so repeated lookups are cheap.
+
+## Validation
+
+`await request.validate(rules)` runs the Validator (see `validation.md`) against `request.all()` and returns sanitized data. Failures throw `ValidationException`, which `HandleError` turns into a `422` JSON response.
+
+```ts
+const payload = await request.validate({
 	email: "required|email",
-	age: "nullable|integer|min:18",
+	password: "required|string|min:8",
 });
 ```
 
-## Raw access
-- `request.getRawRequest()` returns the underlying Fetch `Request` for low-level APIs.
+## Cookies & Sessions
+
+- `request.cookies()` returns the `CookieJar`. Call `cookies.get("name")` or queue values via `cookies.queue(name, value, options)`. Encryption happens automatically unless the cookie is listed in `config/session.encrypt_except`.
+- `request.session()` returns the current `Session` instance (or `null` if `StartSession` hasn’t run). Sessions support `get`, `put`, `flash`, `remember`, etc.
+
+## Authentication
+
+- `request.user<T>()` returns the authenticated user set by the session guard.
+- `request.setUser(user)` lets middleware override the current user object (e.g., after verifying HTTP Basic credentials).
+
+## Attributes
+
+`request.setAttribute(key, value)` / `getAttribute(key)` provide a lightweight way to share data between middleware and downstream handlers. Session errors, throttling metadata, and other transient bits flow through attributes.
+
+## Raw Access
+
+Need low-level control? `request.getRawRequest()` returns the original Fetch `Request` so you can stream bodies, clone, or interact with APIs that expect the native object.
 
 ## RequestContext
-Use `RequestContext.get()` anywhere (services, helper functions) to retrieve the `HttpRequest` tied to the current async call chain. This powers the global `inertia()` helper and lets you access request data without threading it through every function.
+
+`RequestContext` (AsyncLocalStorage) lets you retrieve the current request from anywhere:
 
 ```ts
 import { RequestContext } from "@core/Application/RequestContext";
 
 export const currentRequest = () => {
 	const request = RequestContext.get();
-	if (!request) {
-		throw new Error("No active request");
-	}
-
+	if (!request) throw new Error("No active request");
 	return request;
 };
-
-// Later
-const locale = currentRequest().header("x-locale") ?? "en";
 ```
+
+Helpers like `globalThis.inertia` and `globalThis.route` rely on `RequestContext`, mirroring Laravel’s ability to access the current request from facades or helper functions.
+
+Lantern’s request object intentionally feels the same as Laravel’s, so migrating controllers or middleware is largely copy/paste.***

@@ -1,15 +1,18 @@
 import { ValidationException } from "@core/Validation/ValidationException";
 
+type ValidationData = Record<string, unknown>;
+type ValidationErrors = Record<string, string[]>;
+
 export type RuleResult = {
 	valid: boolean;
-	value?: any;
+	value?: unknown;
 	message?: string;
 	stop?: boolean;
 };
 export type RuleFunction = (
-	value: any,
+	value: unknown,
 	field: string,
-	data: Record<string, any>,
+	data: ValidationData,
 ) => RuleResult | boolean | string | undefined;
 export type ValidationRule = string | RuleFunction;
 export type ValidationRules = Record<string, ValidationRule | ValidationRule[]>;
@@ -19,9 +22,9 @@ type NormalizedRule =
 	| { type: "callback"; fn: RuleFunction };
 
 type RuleHandler = (
-	value: any,
+	value: unknown,
 	field: string,
-	data: Record<string, any>,
+	data: ValidationData,
 	params: string[],
 ) => RuleResult;
 
@@ -42,7 +45,11 @@ const defaultMessages: Record<
 	regex: (field) => `${field} format is invalid.`,
 };
 
-const isEmpty = (value: any) =>
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+	return typeof value === "object" && value !== null;
+};
+
+const isEmpty = (value: unknown) =>
 	value === undefined ||
 	value === null ||
 	(typeof value === "string" && value.trim() === "") ||
@@ -179,9 +186,9 @@ const builtinRules: Record<string, RuleHandler> = {
 };
 
 export class Validator {
-	static validate(data: Record<string, any>, rules: ValidationRules) {
-		const errors: Record<string, string[]> = {};
-		const validated: Record<string, any> = {};
+	static validate(data: ValidationData, rules: ValidationRules) {
+		const errors: ValidationErrors = {};
+		const validated: ValidationData = {};
 
 		for (const [field, fieldRules] of Object.entries(rules)) {
 			const normalized = Validator.normalizeRules(fieldRules);
@@ -321,36 +328,33 @@ export class Validator {
 		};
 	}
 
-	private static getValue(data: Record<string, any>, key: string) {
+	private static getValue(data: ValidationData, key: string) {
 		if (!key) return data;
 		const segments = key.split(".");
-		let current: any = data;
+		let current: unknown = data;
 
 		for (const segment of segments) {
 			if (!segment) return undefined;
-			if (current == null) return undefined;
+			if (!isRecord(current)) return undefined;
 			current = current[segment];
 		}
 
 		return current;
 	}
 
-	private static setValue(
-		target: Record<string, any>,
-		key: string,
-		value: any,
-	) {
+	private static setValue(target: ValidationData, key: string, value: unknown) {
 		if (!key) return;
 		const segments = key.split(".");
-		let current: Record<string, any> = target;
+		let current: ValidationData = target;
 
 		for (let i = 0; i < segments.length - 1; i++) {
 			const segment = segments[i];
 			if (!segment) return;
-			if (typeof current[segment] !== "object" || current[segment] === null) {
+			const existing = current[segment];
+			if (!isRecord(existing)) {
 				current[segment] = {};
 			}
-			current = current[segment];
+			current = current[segment] as ValidationData;
 		}
 
 		const lastSegment = segments[segments.length - 1];

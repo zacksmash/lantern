@@ -1,19 +1,16 @@
 import type { HttpRequest } from "@core/Http/Request";
 
-export type PropResolver =
-	| ((request: HttpRequest) => any | Promise<any>)
-	| ((request: HttpRequest) => any);
+export type PropResolver<TValue = unknown> = (
+	request: HttpRequest,
+) => TValue | Promise<TValue>;
 
-export type InertiaPropValue =
-	| any
-	| ((request: HttpRequest) => any | Promise<any>)
-	| WrappedInertiaProp;
+export type InertiaPropValue = unknown | PropResolver | WrappedInertiaProp;
 
 export type InertiaProps = Record<string, InertiaPropValue>;
 
 export interface InertiaPage {
 	component: string;
-	props: Record<string, any>;
+	props: Record<string, unknown>;
 	url: string;
 	version: string;
 	mergeProps?: string[];
@@ -112,7 +109,7 @@ export const isWrappedProp = (
 	);
 };
 
-export const ensureResolver = (value: any | PropResolver): PropResolver => {
+export const ensureResolver = (value: unknown | PropResolver): PropResolver => {
 	if (typeof value === "function") {
 		return value as PropResolver;
 	}

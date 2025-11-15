@@ -16,7 +16,7 @@ const HandleResponse = async (request: Request): Promise<Response> => {
 	);
 };
 
-const HandleError = async (error: any): Promise<Response> => {
+const HandleError = async (error: unknown): Promise<Response> => {
 	const environment = env("APP_ENV", "production");
 
 	if (error instanceof ValidationException) {

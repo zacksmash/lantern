@@ -4,7 +4,7 @@ const defaultEngine = new ViewEngine();
 
 export const view = async (
 	viewName: string,
-	data: Record<string, any> = {},
+	data: Record<string, unknown> = {},
 	options: ViewOptions = {},
 ): Promise<Response> => {
 	const html = await defaultEngine.render(viewName, data);

@@ -1,7 +1,11 @@
 import { Config } from "@core/Config";
 import { Env } from "@core/Env";
 import { inertia } from "@core/Inertia/Inertia";
-import { route as routeHelper } from "@core/Routing/Facades/URL";
+import { auth } from "@core/Support/Facades/Auth";
+import { cache } from "@core/Support/Facades/Cache";
+import { db } from "@core/Support/Facades/DB";
+import { session } from "@core/Support/Facades/Session";
+import { route } from "@core/Support/Facades/URL";
 import { view } from "@core/View/view";
 
 const env = new Env();
@@ -11,6 +15,10 @@ const config = new Config();
 config.load();
 globalThis.config = config.get.bind(config);
 
-globalThis.route = routeHelper;
+globalThis.route = route;
 globalThis.inertia = inertia;
 globalThis.view = view;
+globalThis.auth = auth;
+globalThis.cache = cache;
+globalThis.session = session;
+globalThis.db = db;

@@ -4,7 +4,7 @@ import type { HttpRequest } from "@core/Http/Request";
 export class RequestContext {
 	private static storage = new AsyncLocalStorage<HttpRequest>();
 
-	static run(request: HttpRequest, callback: () => any) {
+	static run<T>(request: HttpRequest, callback: () => T): T {
 		return RequestContext.storage.run(request, callback);
 	}
 

@@ -1,106 +1,89 @@
-# Routing & Controllers
+# Routing
 
-Lantern's router (`@core/Routing/Router.ts`) offers Laravel-style expressiveness while running entirely on Bun.
+Lantern’s router looks and feels like Laravel’s. You define routes in `routes/index.ts` using the `Route` facade, the container resolves controllers, and URL generation works through a shared `UrlGenerator`.
 
-## Defining routes
-- Edit `routes/index.ts` and use the `Route` facade (resolved from the container).
-- HTTP verbs: `Route.get`, `post`, `put`, `patch`, `delete`, `options`, `head`, `match([...])`, and `any()`.
-- Actions can be:
-  - A controller class with an `invoke` method (instantiated via the container).
-  - A tuple `[ControllerClass, "methodName"]`.
-  - A plain function `(request) => Response`.
-  - A string method name when inside `Route.controller(...).group(...)`.
-- Resource helpers: `Route.resource("users", UsersController)` scaffolds index/create/store/show/edit/update/destroy routes with conventional URIs and names.
-
-## Controllers
-- Place controllers in `app/controllers`. Export classes with `invoke(request)` or additional methods (`index`, `store`, etc.).
-- Controllers resolved via the router can use constructor injection if decorated with `@Injectable()`.
+## Defining Routes
 
 ```ts
-import { Injectable } from "@core/Container/Decorators";
-import type { HttpRequest } from "@core/Http/Request";
-import { UserService } from "@app/services/UserService";
+import { Route } from "@core/Support/Facades/Route";
+import { HomeController } from "@app/controllers/HomeController";
 
-@Injectable()
-export class UsersController {
-	constructor(private users: UserService) {}
-
-	async index() {
-		return inertia("Users/Index", {
-			users: () => this.users.all(),
-		});
-	}
-
-	async show(request: HttpRequest) {
-		const user = await this.users.find(Number(request.params("user")));
-		return view("users/show", { user });
-	}
-}
-
-Route.resource("users", UsersController);
+Route.get("/", HomeController).name("home");
+Route.post("/contact", [HomeController, "store"]).name("contact.store");
 ```
 
-## Route groups & attributes
-Use facades or direct router methods to stack modifiers:
+Supported verbs: `get`, `post`, `put`, `patch`, `delete`, `options`, `head`, `match([...])`, and `any()`.
+
+### Controllers
+
+- `Route.get("/dashboard", DashboardController)` resolves the controller and calls its `invoke` method.
+- `[ControllerClass, "method"]` calls the specified method.
+- Route groups may call `Route.controller(ControllerClass).group(...)` so inner routes can use string methods (`"index"`, `"store"`, etc.).
+- Controllers support constructor injection via `@Injectable()` or `static inject = [...]`.
+
+### Route Groups
+
 ```ts
-Route.middleware(["web", AuthMiddleware])
+Route.middleware(["web", "auth"])
 	.prefix("admin")
 	.name("admin.")
 	.controller(AdminController)
 	.where({ id: /[0-9]+/ })
 	.group(() => {
-		Route.get("/dashboard", "index")
-			.middleware("can:view-admin");
+		Route.get("/dashboard", "index");
+		Route.get("/users/{id}", "show");
 	});
 ```
-- `prefix` prepends URL segments (automatically normalizes slashes).
-- `name` prefixes route names.
-- `middleware` accepts aliases, groups, or constructors.
-- `where` assigns regex constraints to parameters.
-- `controller` lets you specify actions via string method names inside the group.
 
-## Parameters & patterns
-- Declare parameters with `{user}`. Add `?` for optional segments (`{post?}`).
-- `route.params()` returns an object of matched values. Optional segments collapse (no trailing slash) when missing.
-- Use `route.where({ user: "[0-9]+" })` or pass a `RegExp` to enforce formats.
+Group helpers mirror Laravel:
 
-## Middleware aliases
-`Router.aliasMiddleware(alias, MiddlewareClass)` lets you add runtime aliases. Framework defaults come from `@core/Http/Middleware/Manifest.ts` (e.g., `logger`).
+| Helper | Description |
+| --- | --- |
+| `middleware(...)` | Accepts aliases, groups, or constructors. |
+| `prefix("admin")` | Prepends URI segments (auto-normalized). |
+| `name("admin.")` | Prefixes route names. |
+| `controller(Class)` | Default controller for nested string routes. |
+| `where({ param: pattern })` | Regex constraints for parameters. |
 
-```ts
-import { app } from "@root/bootstrap/app";
+### Parameters
 
-app.router.aliasMiddleware("throttle", ThrottleMiddleware);
+- `{user}` defines a required parameter; `{post?}` makes it optional.
+- Constraints can be strings or `RegExp` instances.
+- `request.params()` exposes matched values.
 
-Route.get("/api/data", ApiController)
-	.middleware(["api", "throttle"])
-	.name("api.data");
-```
+### Resources
 
-## Naming & URL generation
-- Chain `.name("users.show")` on routes. Names automatically respect the current group's `name()` prefix.
-- `globalThis.route(name, params?, absolute = true)` resolves URLs via `UrlGenerator`. Required params must be provided, optional ones collapse, and leftover data becomes query strings.
-- `UrlGenerator` uses `APP_URL` as its base. Pass `{ absolute: false }` to produce relative paths.
+`Route.resource("users", UsersController)` scaffolds conventional CRUD routes with names like `users.index`, `users.show`, etc.
+
+## Middleware
+
+Attach middleware via strings (aliases) or classes:
 
 ```ts
-const profileUrl = route("users.show", { user: 42 });
-const editUrl = route("users.edit", { user: 42 }, false); // -> /users/42/edit
+Route.get("/profile", ProfileController)
+	.middleware(["web", "auth", "verified"])
+	.name("profile.show");
 ```
 
-## Route manifests & caching
-- `router.getRouteManifest()` returns `{ name: { uri, methods } }`, ideal for writing to disk in a future `route:cache` command.
-- `router.loadRouteManifest(manifest)` lets you hydrate the map without re-registering routes at runtime.
+Aliases are declared in `@core/Http/Middleware/Manifest.ts`. You can register new aliases at runtime with `router.aliasMiddleware("custom", CustomMiddleware)`.
+
+## Naming & URLs
+
+Chain `.name("users.show")` to assign route names. Generate links using the global `route()` helper or `URL` facade:
 
 ```ts
-import { app } from "@root/bootstrap/app";
-import { writeFileSync } from "node:fs";
-
-const manifest = app.router.getRouteManifest();
-writeFileSync("bootstrap/cache/routes.json", JSON.stringify(manifest));
-
-// Later at boot
-app.router.loadRouteManifest(JSON.parse(readFileSync(...).toString()));
+const url = route("users.show", { user: 42 }); // absolute
+const relative = route("users.edit", { user: 42 }, false); // /users/42/edit
 ```
 
-## Error handling
-If no route matches, Lantern returns a `404` `Response("Not Found")`. Add a catch-all route if you want custom behavior.
+Missing required parameters throw descriptive errors. Extra parameters become query strings.
+
+## Route Manifests
+
+`router.getRouteManifest()` returns `{ name: { uri, methods } }`. Write it to disk to build route caches. Later, call `router.loadRouteManifest(manifest)` to hydrate the lookup map without registering every route (useful for CLI tools or tests).
+
+## Fallbacks
+
+Unmatched requests return `404 Not Found`. Add a catch-all route (`Route.any("/{path}", ...).where({ path: ".*" })`) if you want custom behaviour.
+
+Lantern’s routing DSL intentionally replicates Laravel’s, so porting routes or controllers requires minimal changes.***

@@ -1,7 +1,7 @@
 import type { Router } from "@core/Routing/Router";
 
 type ParameterValue = string | number | boolean | null | undefined;
-type RouteParameters = Record<string, ParameterValue | ParameterValue[]>;
+export type RouteParameters = Record<string, ParameterValue | ParameterValue[]>;
 
 export class UrlGenerator {
 	constructor(

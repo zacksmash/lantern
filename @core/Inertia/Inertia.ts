@@ -33,7 +33,7 @@ export const makeInertia = (
 	return factory.render(request, component, props, options);
 };
 
-type PropInput = PropResolver | any;
+type PropInput = PropResolver | unknown;
 
 const wrap = (descriptor: PropDescriptor) => wrapPropDescriptor(descriptor);
 

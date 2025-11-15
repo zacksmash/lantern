@@ -1,45 +1,70 @@
-# Architecture Overview
+# Architecture Overview (Updated)
 
-## Runtime flow
+This note tracks the current Lantern architecture so future Codex tasks have up-to-date context.
 
-1. `lantern.ts` boots Bun's HTTP server and wires `HandleResponse` / `HandleError` from `@core/Application/ProcessRequest.ts`.
-2. `HandleResponse` wraps each request inside `RequestContext.run` using the custom `HttpRequest` wrapper so async work can read `RequestContext.get()` later, then instantiates `HttpKernel`.
-3. `HttpKernel` (see `@core/Http/Kernel.ts`) performs maintenance & static file short-circuits, then builds the middleware stack (global + per-route) and finally hands control to the router via `app.handleRequest`.
-4. `Application` (`@core/Application/Application.ts`) owns the IoC container, loads service providers, and exposes `handleRequest` which simply delegates to the router currently bound in the container.
+## Runtime Flow
 
-This Laravel-style separation keeps bootstrap code small (`bootstrap/app.ts`) and lets providers & middleware own most behavior.
+1. **Bootstrap** – `lantern.ts` registers `HandleResponse` / `HandleError` as Bun’s fetch handlers.
+2. **RequestContext** – `HandleResponse` wraps each Fetch `Request` inside `RequestContext.run(...)`, creating an `HttpRequest` wrapper that exposes Laravel-style helpers.
+3. **Scoped Container** – `app.getContainer().runScope` ensures every request receives isolated scoped services (sessions, per-request caches, etc.).
+4. **HttpKernel** – Checks for maintenance mode, serves static files from `public/`, expands middleware (global + group + route), then dispatches to `app.handleRequest`.
+5. **Application / Router** – `Application` delegates to the `Router`, which matches routes, resolves controllers via the container, and invokes controller methods/closures.
+6. **Responses** – Controllers commonly return Inertia responses or HTML views. `HandleError` acts as the final safety net for uncaught exceptions.
 
-## Container, providers, and lifecycle
+## Container & Providers
 
-- `Application` creates a `Container` (`@core/Container.ts`) immediately but defers provider work until `configure(basePath)` runs. `configure` is async so providers can perform asynchronous setup (loading routes, warming caches, connecting to databases) before the server begins handling traffic. During configure, the app binds itself into the container under `"app"`, `"application"`, and the `Application` class, registers all framework/user providers from `@core/Foundation/ServiceProvidersManifest.ts`, and then boots them.
-- Providers extend `ServiceProvider` and can `register` bindings (usually `singleton`) and `boot` to perform setup such as loading `routes/index.ts`. Because the container is available during construction, providers can resolve other services and even the `Application` instance directly.
-- The container understands tokens (strings, symbols, or classes). Use `createToken<T>("description")` from `@core/Container/Tokens` when you need an interface-style binding. The container resolves dependencies declared via constructor parameter types (when the class is decorated with `@Injectable()`) or the `@Inject(Token)` decorator (with `static inject = []` still available as an escape hatch). It detects circular dependencies, keeps singleton instances cached, and now supports scoped lifetimes (e.g., `container.scoped(Token, factory)` combined with `container.runScope` to create per-request services).
-- Global helpers (`globalThis.env` / `globalThis.config`) are initialized in `@core/Globals.ts`, which `HttpKernel` imports before serving traffic. Config files live in `/config` and are loaded via `Config.load`, supporting environment overrides and JSON caching.
+- `Application.configure(basePath)` binds the app + container tokens, registers framework providers (`Cache`, `Encryption`, `Session`, `Auth`, `Database`, `Routing`), then boots them.
+- Providers extend `ServiceProvider` with `register()` (bindings) and `boot()` (side effects such as loading routes or warming caches).
+- The container now exposes typed helpers: `bind`, `singleton`, `scoped`, `instance`, guarded resolution, and circular dependency detection. `@Injectable()` + `@Inject(Token)` wire constructor injection.
+- Scoped bindings are critical: the HTTP kernel always runs inside `container.runScope`, so per-request services (like request caches) remain isolated.
 
-## Routing and controllers
+## Routing & Middleware
 
-- `RoutingServiceProvider` binds the `router` singleton and dynamically imports `/routes`. Routes are registered using the facade `@core/Routing/Facades/Route`, which proxies to the container-resolved router.
-- `Router` now mirrors Laravel's API surface: HTTP verb helpers, `match`, `any`, resource routes, route groups with `prefix/middleware/name/controller/where`, aliasable middleware, and `{param}` style placeholders (with optional segments like `{id?}`).
-- Actions can be plain functions, controller classes with an `invoke` method, or controller method strings (made possible via `Route.controller(...)` groups). Route names automatically honor group prefixes, matching Laravel expectations. As routes are named they’re tracked inside the router, which also supports exporting/importing a JSON manifest for eventual `route:cache`-style tooling.
-- Controllers still live inside `app/controllers` (see `IndexController.ts` for the default pattern). Controllers and middleware are instantiated through the container, so anything declaring `static inject = []` receives its dependencies automatically. Any route middleware defined through `.middleware([...])` is appended to the global middleware sequence in `HttpKernel`.
-- URL generation is handled by `UrlGenerator` (`@core/Routing/UrlGenerator.ts`), bound inside the routing service provider and exposed globally via `route(name, params?, absolute?)`. The generator replaces `{param}` placeholders, trims optional segments, and appends leftover values as query strings using `APP_URL` for the base.
+- Routes live in `routes/index.ts` via the `Route` facade. Verbs, groups, resources, and parameter constraints match Laravel semantics (`prefix`, `middleware`, `name`, `controller`, `where`).
+- Middleware stacks are declared in `@core/Http/Middleware/Manifest.ts`. The manager resolves aliases/groups into concrete classes using the container so constructor injection works inside middleware too.
+- The `Router` keeps a manifest of named routes for eventual caching and drives the `UrlGenerator` used by the global `route()` helper.
 
-## Middleware, request, and validation
+## Request Object
 
-- `HttpKernel` asks the `MiddlewareManager` (`@core/Http/Middleware/Manager.ts`) to expand the configured stacks from `@core/Http/Middleware/Manifest.ts`. Declare global middleware, named groups (e.g., `web`, `api`), and aliases once, and each request receives the expanded, container-resolved instances.
-- Middleware are composed right-to-left to build an async pipeline. Route-specific middleware entries can be class constructors, string aliases, or group names; after expansion they’re instantiated through the IoC container so dependencies declared via `static inject = []` are honored.
-- `RequestContext` uses `AsyncLocalStorage` so downstream code can access the current request without explicitly passing it.
-- `HttpRequest` (`@core/Http/Request.ts`) wraps the Fetch `Request` object with helpers (`input`, `query`, `params`, `route`, `validate`, etc.), lazily parsing JSON/form bodies and caching results per request.
-- Validation is handled by `@core/Validation/Validator.ts` with familiar rules (`required`, `nullable`, `string`, `integer`, `boolean`, `array`, `email`, `min`, `max`, `in`, `regex`, plus custom callbacks). Failures throw a `ValidationException` which `HandleError` serializes into a JSON `422` response automatically.
+`HttpRequest` wraps Bun’s request with helpers:
 
-## Rendering & Responses
+- Query + body parsing (JSON, form-urlencoded, multipart) with caching.
+- `input`, `all`, `params`, `route`, `validate` (dot-notation aware).
+- `cookies()` returns a `CookieJar` with queueing, encryption, and HTTP-only helpers.
+- `session()` exposes the current `Session`, including flash data utilities.
+- `user()` / `setUser()` interact with the auth guard.
+- Arbitrary attributes allow middleware to stash data for later stages.
 
-- Inertia responses are handled by `InertiaResponseFactory` (`@core/Inertia/InertiaResponseFactory.ts`). Controllers call the global `inertia(component, props)` helper, which inspects the current `HttpRequest` via `RequestContext`, honors the Inertia spec (partial reloads, version checking, `X-Inertia` headers), and returns either JSON (for internal Inertia visits) or an HTML shell using `assets/index.html`.
-- Blade-style responses use the global `view("template", data)` helper powered by `ViewEngine` (`@core/View/ViewEngine.ts`). Templates live under `resources/views` and support simple `{{ name }}` interpolation plus automatic `@vite` replacement.
-- The HTML shell loader (`@core/View/AppShellRenderer.ts`) replaces `@vite` with the correct script/link tags by delegating to `ViteAssetTagGenerator`. In dev, tags point to the Vite dev server specified in `public/hot`; in production they reference `public/build/manifest.json` along with CSS and modulepreload tags. The same generator exposes `getVersion()` for Inertia’s asset versioning.
+Everything is request-aware thanks to `RequestContext`.
 
-## Static assets and storage
+## Validation
 
-- Static files live in `/public`; `HttpKernel.checkForStaticRequest` serves them directly before the middleware stack runs.
-- Put a `.maintenance` file under `storage/app/.maintenance` to return a 503 response globally.
-- User-controlled storage directories live under `storage/app/{public,private}` mirroring Laravel's disk layout, though adapters have not been implemented yet.
+`@core/Validation/Validator.ts` implements Laravel-like rules (`required`, `nullable`, `string`, `integer`, `boolean`, `array`, `email`, `min`, `max`, `in`, `regex`) plus custom callbacks. Controllers typically call `await request.validate(rules)`. Failures throw `ValidationException`, and `HandleError` converts it into a `422` JSON payload.
+
+## Cache, Session & Auth
+
+- `CacheManager` supports memory, Redis, and SQL-backed stores. Repositories expose `get`, `put`, `forever`, `remember`, `forget`.
+- `SessionManager` uses the cache driver for persistence and handles cookie issuance, flash data, and request tokens. Cookie encryption happens via `EncryptCookies`.
+- `AuthManager` implements a session guard (`web`) with middleware aliases (`auth`, `guest`, `auth.basic`, etc.). User records are serialized into the session, mirroring Laravel’s session guard behaviour.
+
+## Database
+
+`DatabaseManager` wraps Bun’s `SQL` client, providing named connections (`sqlite`, `mysql`, `pgsql`). The `db()` facade returns the raw SQL template tag so you can run queries directly.
+
+## Rendering
+
+- **Inertia** – `InertiaResponseFactory` matches the official Inertia spec (partial reloads, versioning via `ViteAssetTagGenerator.getVersion()`, merge/scroll metadata). Props can be wrapped with helper descriptors (`optional`, `always`, `defer`, `merge`, `scroll`).
+- **Views** – `ViewEngine` loads HTML templates under `resources/views`, interpolates `{{ }}` expressions, and swaps `@vite` tokens for the correct script/link tags. The global `view()` helper returns a ready-made `Response`.
+- **Assets** – The custom Vite plugin writes `public/hot` during dev and reads `public/build/manifest.json` during production so `@vite` replacements stay in sync.
+
+## Storage & Maintenance
+
+- `public/` hosts static assets; `HttpKernel` serves them before middleware.
+- `storage/app` houses runtime data plus the `.maintenance` toggle. Config caches can live under `storage/config.cache.json`.
+
+## Error Handling
+
+- `HandleError` turns `ValidationException` into JSON 422 responses, bubbles errors in development, and emits a generic 500 in production unless you add middleware to override it.
+- Middleware can wrap `await next()` in try/catch to render custom error pages or log exceptions before they reach `HandleError`.
+
+This snapshot should keep Codex aligned with the current framework state whenever you modify or extend Lantern.***

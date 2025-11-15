@@ -9,10 +9,12 @@ const ReflectGlobal: typeof Reflect = (() => {
 })();
 
 type PropertyKeyType = string | symbol | undefined;
+type MetadataKey = string | symbol;
+type MetadataValue = unknown;
 
 const metadataStore = new WeakMap<
 	object,
-	Map<PropertyKeyType, Map<any, any>>
+	Map<PropertyKeyType, Map<MetadataKey, MetadataValue>>
 >();
 
 const getOrCreatePropertyMap = (
@@ -41,8 +43,8 @@ const getPropertyMap = (target: object, propertyKey: PropertyKeyType) => {
 };
 
 const defineMetadata = (
-	metadataKey: any,
-	metadataValue: any,
+	metadataKey: MetadataKey,
+	metadataValue: MetadataValue,
 	target: object,
 	propertyKey?: PropertyKeyType,
 ) => {
@@ -55,7 +57,7 @@ const defineMetadata = (
 };
 
 const getOwnMetadata = (
-	metadataKey: any,
+	metadataKey: MetadataKey,
 	target: object,
 	propertyKey?: PropertyKeyType,
 ) => {
@@ -64,7 +66,7 @@ const getOwnMetadata = (
 };
 
 const hasOwnMetadata = (
-	metadataKey: any,
+	metadataKey: MetadataKey,
 	target: object,
 	propertyKey?: PropertyKeyType,
 ) => {
@@ -73,11 +75,11 @@ const hasOwnMetadata = (
 };
 
 const getMetadata = (
-	metadataKey: any,
+	metadataKey: MetadataKey,
 	target: object,
 	propertyKey?: PropertyKeyType,
 ) => {
-	let current: any = target;
+	let current: object | null = target;
 
 	while (current) {
 		const result = getOwnMetadata(metadataKey, current, propertyKey);
@@ -92,11 +94,11 @@ const getMetadata = (
 };
 
 const hasMetadata = (
-	metadataKey: any,
+	metadataKey: MetadataKey,
 	target: object,
 	propertyKey?: PropertyKeyType,
 ) => {
-	let current: any = target;
+	let current: object | null = target;
 
 	while (current) {
 		if (hasOwnMetadata(metadataKey, current, propertyKey)) {
@@ -108,7 +110,7 @@ const hasMetadata = (
 	return false;
 };
 
-const metadata = (metadataKey: any, metadataValue: any) => {
+const metadata = (metadataKey: MetadataKey, metadataValue: MetadataValue) => {
 	return function decorator(target: object, propertyKey?: PropertyKeyType) {
 		defineMetadata(metadataKey, metadataValue, target, propertyKey);
 	};
@@ -141,31 +143,34 @@ if (typeof ReflectGlobal.metadata !== "function") {
 declare global {
 	namespace Reflect {
 		function defineMetadata(
-			metadataKey: any,
-			metadataValue: any,
+			metadataKey: MetadataKey,
+			metadataValue: MetadataValue,
 			target: object,
 			propertyKey?: PropertyKeyType,
 		): void;
 		function getOwnMetadata(
-			metadataKey: any,
+			metadataKey: MetadataKey,
 			target: object,
 			propertyKey?: PropertyKeyType,
-		): any;
+		): MetadataValue;
 		function getMetadata(
-			metadataKey: any,
+			metadataKey: MetadataKey,
 			target: object,
 			propertyKey?: PropertyKeyType,
-		): any;
+		): MetadataValue;
 		function hasMetadata(
-			metadataKey: any,
+			metadataKey: MetadataKey,
 			target: object,
 			propertyKey?: PropertyKeyType,
 		): boolean;
 		function hasOwnMetadata(
-			metadataKey: any,
+			metadataKey: MetadataKey,
 			target: object,
 			propertyKey?: PropertyKeyType,
 		): boolean;
-		function metadata(metadataKey: any, metadataValue: any): ClassDecorator;
+		function metadata(
+			metadataKey: MetadataKey,
+			metadataValue: MetadataValue,
+		): ClassDecorator;
 	}
 }

@@ -1,9 +1,15 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-// Stronger typing: config files contain objects
+type ConfigStore = Record<string, unknown>;
+type ConfigValue = unknown;
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
 export class Config {
-	private static store: Record<string, any> = {};
+	private static store: ConfigStore = {};
 	private static frozen = false;
 
 	/** Load all config files with environment overrides */
@@ -41,16 +47,11 @@ export class Config {
 	}
 
 	/** Deep merge two config objects */
-	private deepMerge(base: any, override: any): any {
-		if (
-			typeof base !== "object" ||
-			typeof override !== "object" ||
-			!base ||
-			!override
-		) {
+	private deepMerge(base: ConfigValue, override: ConfigValue): ConfigValue {
+		if (!isRecord(base) || !isRecord(override)) {
 			return override;
 		}
-		const out: any = { ...base };
+		const out: Record<string, unknown> = { ...base };
 		for (const key of Object.keys(override)) {
 			out[key] = this.deepMerge(base[key], override[key]);
 		}
@@ -58,18 +59,22 @@ export class Config {
 	}
 
 	/** Get value using dot notation */
-	get(key: string, fallback?: any): any {
+	get<T = unknown>(key: string, fallback?: T): T | undefined {
 		const [file, ...rest] = key.split(".");
 		if (!file) return fallback;
-		const target = Config.store[file];
-		if (!target) return fallback;
+		let value: unknown = Config.store[file];
+		if (typeof value === "undefined") return fallback;
 
-		let value = target;
 		for (const part of rest) {
-			if (value == null || typeof value !== "object") return fallback;
+			if (!isRecord(value)) {
+				return fallback;
+			}
 			value = value[part];
+			if (typeof value === "undefined") {
+				return fallback;
+			}
 		}
-		return value ?? fallback;
+		return (value as T) ?? fallback;
 	}
 
 	/** Create a cached, production‑ready JSON file */
@@ -83,7 +88,7 @@ export class Config {
 	) {
 		if (!existsSync(path)) throw new Error("Config cache file missing.");
 		const raw = readFileSync(path, "utf8");
-		Config.store = JSON.parse(raw);
+		Config.store = JSON.parse(raw) as ConfigStore;
 		Config.frozen = true;
 		return Config.store;
 	}

@@ -1,37 +1,48 @@
-# Storage & Static Assets
+# Storage & Static Files
 
-Lantern keeps filesystem responsibilities simple but provides a few conveniences.
+Lantern mirrors Laravel’s filesystem conventions: `public/` for web-accessible assets and `storage/` for everything else.
 
-## Public directory
-- Place publicly accessible files in `public/` (favicons, robots.txt, uploaded assets you intend to expose).
-- `HttpKernel` serves any matching file before running middleware, so requests like `/build/app.js` never touch your controllers.
-- The Vite build writes hashed assets to `public/build`. Keep this folder under version control if you deploy via build artifacts.
+## Public Directory
 
-## Hot file
-- During `vite dev`, the Lantern Vite plugin writes the dev server URL to `public/hot`.
-- Its presence toggles dev-asset behavior inside `ViteAssetTagGenerator` and Inertia. Delete the file (or stop Vite) to fall back to manifest tags.
+- Serve images, favicons, robots.txt, and compiled assets from `public/`.
+- `HttpKernel` checks this directory before running middleware, so requests such as `/build/app.js` never touch your controllers.
+- Vite writes hashed files to `public/build`; keep it in your deployment artifact or rebuild during deploys.
 
-## Storage directory
-- Use `storage/` for runtime data not meant to be public. The default layout mirrors Laravel (`storage/app/public`, `storage/app/private`, etc.).
-- Create `storage/app/.maintenance` to toggle maintenance mode instantly.
-- Configuration caches can live under `storage/config.cache.json` (see `configuration-and-globals.md`).
-- Although disk adapters are not implemented yet (see `codex-notes/gaps.md`), this structure allows you to add them later without breaking conventions.
+## Hot File
+
+During `vite dev`, the Lantern Vite plugin writes the dev server URL to `public/hot`. Its presence tells `ViteAssetTagGenerator` (and Inertia) to use the dev server instead of the manifest. Delete the file or stop Vite to fall back to production behaviour.
+
+## Storage Directory
+
+```
+storage/
+  app/
+    public/
+    private/
+    .maintenance
+```
+
+- Use `storage/app/public` for files you later symlink or copy into `public/`.
+- `storage/app/.maintenance` toggles maintenance mode; create/remove the file to control availability.
+- Config caches and other metadata can live under `storage/` (e.g., `storage/config.cache.json`).
+
+Example helpers:
 
 ```ts
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-const saveAvatar = async (file: File, userId: number) => {
+export const storeAvatar = async (file: File, userId: number) => {
 	const dir = join(process.cwd(), "storage/app/public/avatars");
 	await mkdir(dir, { recursive: true });
 	await Bun.write(join(dir, `${userId}.png`), file.stream());
 };
-
-const enableMaintenance = async () => {
-	await writeFile("storage/app/.maintenance", "down for upgrades");
-};
 ```
 
-## Security tips
-- Never expose `storage/` via a static file server. Bun only serves `public` paths, but keep your deployment configuration aligned with that assumption.
-- Sanitize filenames before copying uploads into `public/` if you implement file handling manually.
+## Security Tips
+
+- Never expose `storage/` directly via a static server; only `public/` should be readable by HTTP.
+- Sanitize filenames before writing uploads to `public/`.
+- Consider wrapping file operations inside a service/provider so you can swap in disk adapters later.
+
+Lantern’s filesystem footprint is intentionally simple today, but the familiar layout makes it easy to grow into a Laravel-like storage abstraction down the road.***

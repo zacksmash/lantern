@@ -1,5 +1,5 @@
 import { ContainerTokens } from "@core/Application/ContainerTokens";
-import { Container, type Token } from "@core/Container";
+import { Container, type FactoryLike, type Token } from "@core/Container";
 import type { ProviderConstructor } from "@core/Foundation/ServiceProvider";
 import { Providers } from "@core/Foundation/ServiceProvidersManifest";
 import type { HttpRequest } from "@core/Http/Request";
@@ -25,8 +25,7 @@ export class Application {
 	}
 
 	async handleRequest(request: HttpRequest): Promise<Response> {
-		const router = this.resolve(ContainerTokens.Router) as Router;
-
+		const router = this.resolve(ContainerTokens.Router);
 		return router.dispatch(request);
 	}
 
@@ -37,7 +36,7 @@ export class Application {
 
 		await this.registerProviders();
 		await this.bootProviders();
-		this.router = this.resolve(ContainerTokens.Router) as Router;
+		this.router = this.resolve(ContainerTokens.Router);
 
 		return this;
 	}
@@ -46,19 +45,19 @@ export class Application {
 		return this;
 	}
 
-	singleton(key: Token, resolver: any) {
+	singleton<T>(key: Token<T>, resolver: FactoryLike<T>) {
 		this.container.singleton(key, resolver);
 	}
 
-	bind(key: Token, resolver: any) {
+	bind<T>(key: Token<T>, resolver: FactoryLike<T>) {
 		this.container.bind(key, resolver);
 	}
 
-	instance(key: Token, value: any) {
+	instance<T>(key: Token<T>, value: T) {
 		this.container.instance(key, value);
 	}
 
-	resolve<T = any>(key: Token<T>): T {
+	resolve<T>(key: Token<T>): T {
 		return this.container.resolve(key);
 	}
 

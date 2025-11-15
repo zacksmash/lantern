@@ -30,6 +30,25 @@
 - Routing + controller handlers receive an instance of `HttpRequest` (`@core/Http/Request`). Use `request.input()`, `request.query()`, `request.params()`, `request.route()`, and `request.getRawRequest()` to access inbound data.
 - Call `await request.validate({ email: "required|email", age: "required|integer|min:18" })` to run Laravel-style validation. The helper returns sanitized data (with type casts for numbers/booleans) or throws a `ValidationException` that the kernel converts into a JSON 422 response automatically.
 
+## Cache & Redis
+
+- Configure stores via `config/cache.ts`. Out of the box there is a `memory` store and a Bun-powered `redis` store; change `default` or call `CacheManager.store("redis")` explicitly.
+- Resolve the cache manager with `container.resolve(ContainerTokens.CacheManager)` or use dependency injection. Repositories expose `get`, `put`, `remember`, `forever`, and `forget`.
+- Redis options honor `REDIS_URL`, `REDIS_HOST`, `REDIS_PORT`, etc., and use Bun’s native client so there’s no npm dependency to maintain.
+
+## Sessions & authentication
+
+- `HttpRequest` exposes `cookies()`, `session()`, `user()`, and `setAttribute()` helpers so middleware/controllers can coordinate state.
+- Use the `web` middleware group on routes that need session/auth/CSRF support. It automatically encrypts cookies, persists sessions, shares validation errors, verifies tokens, and appends queued cookies before returning the response.
+- Resolve `AuthManager` via `ContainerTokens.AuthManager` to check the current user or perform programmatic logins. The default guard stores user payloads inside the session under `auth_user`.
+- Middleware aliases (`auth`, `auth.basic`, `auth.session`, `guest`, `password.confirm`, `signed`, `verified`, `throttle`, `Throttle:api`) mirror Laravel naming so you can decorate routes the same way.
+
+## Database access
+
+- Configure connections in `config/database.ts`. Drivers map to Bun's SQL adapters: `"sqlite"`, `"mysql"`, and `"pgsql"` (`postgres`).
+- Resolve `DatabaseManager` via `container.resolve(ContainerTokens.DatabaseManager)` or call the global `db()` helper. The helper returns Bun's SQL client, so you can run template literal queries, transactions, and connection pooling exactly as Bun documents.
+- Add additional named connections (e.g., `reporting`, `analytics`) and switch via `db("analytics")`.
+
 ## Frontend assets (quick reference)
 
 - Entry point: `assets/js/app.ts` boots Inertia + Vue 3, auto-registering pages from `assets/js/Pages`.

@@ -1,32 +1,39 @@
-# Error Handling & Responses
+# Error Handling
 
-Lantern keeps error handling straightforward while leaving room for custom handlers.
+Lantern’s error handling pipeline mirrors Laravel’s default behaviour: validation errors become structured JSON, development mode surfaces stack traces, and production mode stays simple unless you override it.
 
-## HandleError behavior
-`@core/Application/ProcessRequest.ts` exports `HandleError`, which Bun calls whenever your `fetch` handler throws:
-- `ValidationException` is intercepted and converted into a JSON `422` payload: `{ message, errors }`.
-- In `APP_ENV=development`, other errors are rethrown so Bun prints full stack traces (and so tooling like the Bun inspector can pause on them).
-- In non-development environments, Lantern returns `500 Internal Server Error` with a plain-text message. Customize this by wrapping `HandleError` or adding middleware that catches exceptions earlier.
+## HandleResponse & HandleError
 
-## HTTP-level responses
-- Maintenance mode returns `503` with a plain string (`"The application is under maintenance."`). Adjust `HttpKernel.checkForMaintenanceMode()` if you need a fancy page.
-- Unmatched routes return `404 Not Found` from `Router.runRoute()`.
-- Static file hits return the exact `Response` produced by `Bun.file()`.
+`@core/Application/ProcessRequest.ts` exports the two functions consumed by Bun:
 
-## Logging
-Use middleware (e.g., the built-in `LoggerMiddleware`) to log requests, errors, or metrics. Since the middleware stack wraps `app.handleRequest`, you can catch errors in a custom middleware and respond however you like.
+- **HandleResponse** – wraps each Fetch `Request`, stores a custom `HttpRequest` inside `RequestContext`, and executes the middleware/kernel stack within a container scope.
+- **HandleError** – final safety net that Bun calls whenever `HandleResponse` rejects.
 
-## Custom exception handling
-For richer error pages:
-1. Add middleware that wraps `await next()` in a try/catch.
-2. Detect exception types and render Inertia pages or Blade templates as needed.
-3. Re-throw to let `HandleError` handle the rest, or swallow after constructing a `Response`.
+HandleError logic:
+
+| Condition | Behaviour |
+| --- | --- |
+| `ValidationException` | Returns `422` JSON `{ message, errors }`. |
+| `APP_ENV=development` | Rethrows errors (so Bun prints stack traces / inspector works). |
+| Other environments | Returns `500 Internal Server Error` with a generic message or the `Response` instance if the error already is one. |
+
+Customize this by wrapping `HandleResponse` or adding middleware that intercepts errors earlier.
+
+## HTTP Kernel Responses
+
+- **Maintenance mode** – If `storage/app/.maintenance` exists, `HttpKernel` returns `503` before touching routes.
+- **Static files** – Requests matching files in `public/` short-circuit to the file response. Directory traversal is prevented automatically.
+- **Missing routes** – `Router.runRoute()` returns `404 Not Found`.
+
+## Middleware-Based Error Pages
+
+Like Laravel, you can register middleware to render bespoke error pages:
 
 ```ts
 import type { Middleware } from "@core/Http/Middleware/Contracts";
 import { ValidationException } from "@core/Validation/ValidationException";
 
-export class ErrorPageMiddleware implements Middleware {
+export class ErrorResponder implements Middleware {
 	async handle(request, next) {
 		try {
 			return await next();
@@ -35,15 +42,25 @@ export class ErrorPageMiddleware implements Middleware {
 				return inertia("Errors/Validation", { errors: error.errors }, { status: 422 });
 			}
 
-			console.error("Unhandled error", error);
+			console.error(error);
 			return view("errors/500", { path: request.path() }, { status: 500 });
 		}
 	}
 }
-
-Route.middleware([ErrorPageMiddleware]).group(() => {
-	Route.get("/settings", SettingsController);
-});
 ```
 
-Future improvements (see `codex-notes/gaps.md`) include view-based exception handlers and logging pipelines. Until then, use middleware and service providers to wire whatever error monitoring you prefer.
+Attach the middleware globally or to specific route groups to control which endpoints receive custom handling.
+
+## Logging
+
+Lantern doesn’t prescribe a logger yet, but you can inject your own:
+
+- Write a middleware that logs every request/response pair.
+- Resolve a logging service in `HandleError` (wrap it yourself) or inside your middleware catch blocks.
+- Hook into service providers to wire third-party monitoring (Sentry, Logtail, etc.).
+
+## Testing Errors
+
+Because `HandleError` emits simple `Response` objects, you can assert against status codes and payloads in tests using `bun test`. Throwing `Response` instances inside controllers/middleware lets you short-circuit without bubbling errors further.
+
+Lantern keeps the error stack modest on purpose, giving you a predictable base while leaving room to layer more advanced exception handlers as your application grows.***

@@ -1,11 +1,15 @@
 # Assets, Vite & Frontend Build
 
-Lantern relies on Vite 7 to compile Vue + Inertia assets while Bun serves the backend.
+Lantern ships with a first-class Vite integration that feels just like Laravel’s. Vite handles Inertia + Vue, Tailwind v4, and asset versioning while Bun focuses on HTTP.
 
-## Entry points & structure
-- `assets/js/app.ts` boots `createInertiaApp`, auto-importing Vue pages from `assets/js/Pages/**/*.vue`.
-- `assets/css/app.css` imports Tailwind CSS v4. Update this file to add global styles.
-- `assets/index.html` is the shared HTML shell for SSR-less Inertia responses and fallback pages. Keep the `@vite` and `@inertia` tokens intact.
+## Project Layout
+
+| Path | Purpose |
+| --- | --- |
+| `assets/js/app.ts` | Inertia entry point that bootstraps Vue pages. |
+| `assets/css/app.css` | Tailwind v4 + global styles. |
+| `assets/index.html` | HTML shell containing `@vite` and `@inertia` markers. |
+| `public/` | Static assets. Vite writes builds to `public/build`. |
 
 ```ts
 // vite.config.ts
@@ -19,63 +23,64 @@ export default defineConfig({
 });
 ```
 
-```css
-/* assets/css/app.css */
-@import "tailwindcss";
+## Development Server
 
-body {
-	font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-	background: #f8fafc;
-}
+Run Vite with `bun run dev` or `bun run start` (which boots both Bun and Vite). The Lantern Vite plugin:
+
+- Writes the dev server URL to `public/hot` so the backend can proxy assets.
+- Configures `server.origin` automatically so SSR replacements work.
+- Cleans up the `hot` file on exit to avoid stale URLs.
+
+While `public/hot` exists, `@core/Vite/AssetTagGenerator` emits `<script type="module" src="https://localhost:@port/@vite/client">` and injects your entry points just like Laravel’s `@vite` directive.
+
+## Production Build
+
+```bash
+bun run build   # generates public/build and manifest.json
 ```
 
-```html
-<!-- assets/index.html -->
-<!doctype html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Lantern</title>
-		@vite
-	</head>
-	<body>
-		@inertia
-	</body>
-</html>
-```
+During a production build the Lantern plugin:
 
-## Running Vite
-- `bun run dev` runs `vite dev`, reading configuration from `vite.config.ts`.
-- `bun run build` compiles assets into `public/build` and writes `manifest.json`.
-- `bun run start` runs Bun (`lantern.ts`) and Vite dev server concurrently (via `concurrently`).
+- Compiles every entry declared in `lantern({ input: [...] })`.
+- Writes hashed files to `public/build`.
+- Produces `public/build/manifest.json` used by the server to generate preload `<link>` tags, CSS `<link>` tags, and module `<script>` tags.
 
-## Lantern Vite plugin
-`@core/Vite/Plugin/index.ts` exports the `lantern` plugin used in `vite.config.ts`.
-- Configuration options: `input` (entry files), `publicDirectory` (default `public`), `buildDirectory` (default `build`), `hotFile` (default `${public}/hot`), and `transformOnServe`.
-- During `vite serve`, the plugin writes the dev server URL to `public/hot` so the backend knows where to proxy assets. It also enforces safe environments (blocks HMR on Forge/Vapor/CI unless `LARAVEL_BYPASS_ENV_CHECK=1`).
-- Default aliases include `@ -> /assets/js`. Add more via Vite's standard `resolve.alias` config.
-- `server.origin` defaults to a placeholder so the plugin can replace it with the live dev-server URL in served code.
-- When the dev server starts, the plugin emits helpful logs and deletes `public/hot` on exit signals to avoid stale state.
+Use `bun run serve` (or any Bun host) after building assets.
 
-## Asset tag generation
-`@core/Vite/AssetTagGenerator.ts` powers both views and Inertia responses.
-- Dev mode: reads `public/hot` to discover the dev server URL, then injects `<script type="module" src=".../@vite/client">` and your entry script.
-- Production: loads `public/build/manifest.json`, emits `<link rel="modulepreload">`, CSS `<link>` tags, and the module `<script>` referencing `/build/<hashed>.js`.
-- `getVersion()` hashes the manifest JSON (or returns `"dev"` when in hot mode) so Inertia can detect asset changes.
-- Results are cached per process to avoid re-reading the manifest on every request.
+## Using Assets In Views & Inertia
 
-## Static files & public directory
-- Anything placed in `public/` (including the `build/` output) can be served directly. `HttpKernel.checkForStaticRequest()` handles range-safe lookups and prevents directory traversal attacks.
-- The presence of `public/hot` toggles dev behavior throughout the stack.
-
-## Frontend ergonomics
-- Tailwind is enabled via `@tailwindcss/vite`, so you can use the new utility syntax without extra config.
-- Vue SFC support comes from `@vitejs/plugin-vue`.
-- To add new entry points (e.g., `admin.ts`), update `lantern({ input: ['assets/js/app.ts', 'assets/js/admin.ts'] })` in `vite.config.ts` and your HTML/template references.
+`ViteAssetTagGenerator` drives both the view helper and Inertia response factory:
 
 ```ts
-// assets/js/admin.ts
-import "./css/app.css";
-console.log("Admin entry loaded");
+const tags = await assetGenerator.generateTags(); // called internally
 ```
+
+- **Views** – `ViewEngine` replaces every `@vite` token inside `resources/views/*.html` with the generated tags.
+- **Inertia** – The HTML shell returned by `InertiaResponseFactory` also includes the same tags so SPA hydration works without extra work.
+- **Versioning** – `getVersion()` hashes the manifest (or returns `"dev"` during hot reload). Inertia compares this value with `X-Inertia-Version` to trigger 409 reloads when assets change.
+
+## Custom Entries & Aliases
+
+Need multiple entry points? Pass them to the plugin:
+
+```ts
+lantern({
+	input: ["assets/js/app.ts", "assets/js/admin.ts"],
+	publicDirectory: "public",
+	buildDirectory: "build",
+});
+```
+
+Vite’s standard configuration is still available—add `resolve.alias`, `css.postcss`, or other options as needed.
+
+## Static Files
+
+Anything placed directly in `public/` (images, fonts, uploads) can be hit without touching Vite. `HttpKernel` short-circuits requests to these files while guarding against directory traversal attacks.
+
+## Tailwind & Vue
+
+- Tailwind v4 is enabled through `@tailwindcss/vite`, so utilities work out of the box.
+- SFC support comes from `@vitejs/plugin-vue`.
+- Add additional CSS by editing `assets/css/app.css` or importing new files in your JS entry point.
+
+Lantern aims to mirror Laravel’s “just works” asset story. Point Vite at your entry files, run `bun run start` during development, and the backend automatically injects the right tags regardless of environment.***

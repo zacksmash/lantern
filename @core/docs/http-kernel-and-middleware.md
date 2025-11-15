@@ -1,65 +1,42 @@
 # HTTP Kernel & Middleware
 
-The HTTP layer mirrors Laravel's pipeline: maintenance checks, static asset shortcuts, then middleware before your routes ever run.
+Lantern’s HTTP kernel mirrors Laravel’s responsibility chain: maintenance checks, static asset short-circuits, global middleware, and finally route dispatch.
 
-## Kernel responsibilities
-`@core/Http/Kernel.ts` receives the current `HttpRequest` and:
-1. Returns a `503` when `storage/app/.maintenance` exists.
-2. Streams any file inside `public` that matches the request path (after normalizing to prevent directory traversal).
-3. Resolves middleware via `middlewareManager`, composes them right-to-left, and ends by calling `app.handleRequest(request)`.
+## Kernel Flow
 
-Static files are served before middleware for performance. Use `public/` for compiled assets and uploads meant to be public.
+`@core/Http/Kernel.ts` handles each request:
 
-## Request context
-`HandleResponse` stores each `HttpRequest` inside `RequestContext` (AsyncLocalStorage). Middleware and controllers can call `RequestContext.get()` to access the active request without passing it manually.
+1. **Maintenance mode** – Returns `503` if `storage/app/.maintenance` exists.
+2. **Static assets** – Streams files from `public/` when the path matches, guarding against directory traversal.
+3. **Middleware pipeline** – Builds a stack from the manifest (global → group → route-specific) and executes it.
+4. **Router dispatch** – Calls `app.handleRequest(request)` at the end of the pipeline.
 
-## Middleware manifest
-- Configure stacks in `@core/Http/Middleware/Manifest.ts`:
-  - `global`: runs on every request (defaults to `LoggerMiddleware`).
-  - `groups`: named stacks (e.g., `web`, `api`) you can reference from routes.
-  - `aliases`: map strings to middleware classes so controllers can attach them declaratively.
-- Middleware implement `handle(request, next)` and should return a `Response`.
+Static files are served before middleware for performance, just like Laravel’s `public/` directory.
 
-```ts
-// @core/Http/Middleware/AuthMiddleware.ts
-import type { Middleware } from "@core/Http/Middleware/Contracts";
-import { RequestContext } from "@core/Application/RequestContext";
+## RequestContext
 
-export class AuthMiddleware implements Middleware {
-	async handle(_request, next) {
-		const request = RequestContext.get();
-		const token = request?.header("Authorization");
-		if (!token) {
-			return new Response("Unauthorized", { status: 401 });
-		}
+`HandleResponse` places each `HttpRequest` inside `RequestContext` (AsyncLocalStorage). Any code path can call `RequestContext.get()` or rely on helpers like `inertia()` and `view()` to access the current request.
 
-		// Attach user info to scoped container/service here
-		return next();
-	}
-}
+## Middleware Manifest
 
-// @core/Http/Middleware/Manifest.ts
-import { LoggerMiddleware } from "@core/Http/Middleware/LoggerMiddleware";
-import { AuthMiddleware } from "@core/Http/Middleware/AuthMiddleware";
+Configure stacks in `@core/Http/Middleware/Manifest.ts`:
 
-export const MiddlewareConfig = {
-	global: [LoggerMiddleware],
-	groups: {
-		web: ["logger"],
-		api: ["auth"],
-	},
-	aliases: {
-		logger: LoggerMiddleware,
-		auth: AuthMiddleware,
-	},
-};
-```
+- **global** – Always runs. Defaults include `TrustProxies`, `HandleCors`, `PreventRequestsDuringMaintenance`, `ValidatePostSize`, `TrimStrings`, and `ConvertEmptyStringsToNull`.
+- **groups** – Named stacks such as `web` and `api`. The `web` group mirrors Laravel’s cookie/session/CSRF stack; `api` applies bindings + `Throttle:api`.
+- **aliases** – Map strings to middleware classes (e.g., `auth`, `signed`, `Throttle:api`). Use these names when attaching middleware to routes.
 
-## Manager behavior
-`MiddlewareManager` expands identifiers recursively:
-- Strings resolve to either a group (array) or alias (single middleware). Circular references throw an error.
-- Class constructors are passed directly to the container for instantiation.
-- Route-level middleware (attached via `Route.middleware(...)`) is concatenated after globals.
+Middleware implement `handle(request, next)` and may inject dependencies via the container.
+
+## Middleware Manager
+
+`MiddlewareManager` resolves identifiers recursively:
+
+- Strings resolve to group arrays or alias constructors.
+- Arrays are flattened, preserving order.
+- Classes are instantiated via the container so constructor injection works.
+- Circular references throw descriptive errors.
+
+Route middleware is appended after the global stack:
 
 ```ts
 Route.middleware(["web", "auth"]).group(() => {
@@ -69,12 +46,32 @@ Route.middleware(["web", "auth"]).group(() => {
 Route.get("/health", () => new Response("ok")).middleware(LoggerMiddleware);
 ```
 
-## Example: logger
-`LoggerMiddleware` logs the method/URL before invoking `next()` and logs the response status afterward. Use it as a template for request timing, authentication, etc.
+## Creating Middleware
 
-## Maintenance workflow
-To put the app in maintenance mode:
-```bash
-touch storage/app/.maintenance
+Use the `Middleware` interface from `@core/Http/Middleware/Contracts`:
+
+```ts
+import type { Middleware } from "@core/Http/Middleware/Contracts";
+
+export class LoggerMiddleware implements Middleware {
+	async handle(request, next) {
+		const start = Date.now();
+		const response = await next();
+		console.log(request.method, request.path(), response.status, Date.now() - start);
+		return response;
+	}
+}
 ```
-All requests immediately return `503`. Remove the file to resume service.
+
+Register the class as an alias or add it to a group in the manifest.
+
+## Maintenance Workflow
+
+```bash
+touch storage/app/.maintenance   # enter maintenance
+rm storage/app/.maintenance      # exit maintenance
+```
+
+The kernel checks for this file before running middleware, so responses stay consistent regardless of route or controller logic.
+
+Lantern’s kernel/middleware setup should feel at home to Laravel developers: expressive manifests, convenient helpers, and a predictable order of execution.***
