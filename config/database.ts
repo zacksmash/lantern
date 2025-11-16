@@ -1,3 +1,5 @@
+import { env } from "@core/Support/env";
+
 export default {
 	default: env("DB_CONNECTION", "sqlite"),
 	connections: {

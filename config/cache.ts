@@ -1,3 +1,5 @@
+import { env } from "@core/Support/env";
+
 export default {
 	default: "memory",
 	prefix: env("CACHE_PREFIX", "app_cache"),

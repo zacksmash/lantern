@@ -1,3 +1,5 @@
+import { env } from "@core/Support/env";
+
 export default {
 	driver: env("SESSION_CACHE_DRIVER", "memory"),
 	cookie: env("SESSION_COOKIE", "app_session"),

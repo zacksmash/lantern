@@ -8,6 +8,8 @@ Lantern mirrors Laravel’s startup flow: the Bun entry point builds an `Applica
 import { Application } from "@core/Foundation/Application";
 import type { Exceptions } from "@core/Foundation/Http/Exceptions";
 import type { MiddleWare } from "@core/Foundation/Http/Middleware";
+import { HandleInertiaRequests } from "@app/Middleware/HandleInertiaRequests";
+import AppProviders from "@root/bootstrap/providers";
 
 export const app = new Application(process.cwd())
   .withRouting({
@@ -23,6 +25,7 @@ export const app = new Application(process.cwd())
   .withExceptions((exceptions: Exceptions) => {
     exceptions.report((error) => console.error(error));
   })
+  .withProviders(AppProviders)
   .create();
 ```
 
@@ -61,3 +64,37 @@ Every request and low-level error is proxied back through the `Application`, gua
 The default kernel (`@core/Foundation/Http/DefaultHttpKernel`) is intentionally minimal right now—it reads your routing manifest, exposes a `/up` health check, and returns a JSON payload verifying the framework is alive. As the routing + middleware stacks come online, this kernel will dispatch through those systems without needing to change your `server.ts`. The `terminate()` hook is already wired for future terminable middleware.
 
 If you need to override the kernel (e.g., for tests), call `app.useKernel(() => new CustomKernel()).create();`.
+
+## Container & Service Providers
+
+Lantern ships with an IoC container that mirrors Laravel’s binding API:
+
+```ts
+app.bind("clock", () => new Clock());
+app.singleton(Logger, () => new Logger(app.config("app.name")));
+app.instance("config", appConfigRepository);
+
+const logger = app.make(Logger);
+```
+
+Service providers extend `@core/Foundation/ServiceProvider` and receive the application instance. The bootstrapper registers providers in this order:
+
+1. Framework providers (defined under `@core/Foundation/Providers`)
+2. Any providers supplied to `app.withProviders([...])`
+3. User providers from `bootstrap/providers.ts` (when `withProviders` keeps the default `includeBootstrapProviders = true`)
+
+Each provider’s `register → boot → booted` lifecycle mirrors Laravel’s behaviour, and global `app.booting()` / `app.booted()` callbacks wrap the entire boot sequence.
+
+## Exception Handling
+
+Exceptions are routed through a Laravel-style handler contract (`@core/Foundation/Exceptions/Handler`). The default handler simply defers to the application’s fallback responses (text in production, JSON with stack traces in debug). Override it via:
+
+```ts
+import { Handler } from "@app/Exceptions/Handler";
+
+export const app = new Application(process.cwd())
+  .withExceptionHandler(Handler)
+  .create();
+```
+
+Handlers may register `reportable` / `renderable` callbacks, honour `dontReport`, and decide whether an error should be reported or rendered. You can continue to hook quick reporters via `.withExceptions()` just like Laravel’s `Illuminate\Foundation\Exceptions`.

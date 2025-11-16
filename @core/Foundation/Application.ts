@@ -1,10 +1,23 @@
+import { ConfigRepository } from "@core/Config/Repository";
+import { Container, type Token } from "@core/Container/Container";
 import { env, envBoolean } from "@core/Support/env";
+import providers from "@root/bootstrap/providers";
 import type { RoutingConfiguration } from "./Configuration/Routing";
+import { DefaultExceptionHandler } from "./Exceptions/DefaultHandler";
+import type { ExceptionHandlerContract } from "./Exceptions/Handler";
 import { DefaultHttpKernel } from "./Http/DefaultHttpKernel";
-import { HttpRequest } from "./Http/Request";
 import { Exceptions } from "./Http/Exceptions";
 import type { HttpKernel } from "./Http/Kernel";
 import { type MiddleWare, MiddlewareManager } from "./Http/Middleware";
+import { HttpRequest } from "./Http/Request";
+import frameworkProviders from "./Providers";
+import type {
+	ApplicationContract,
+	ServiceProvider,
+	ServiceProviderConstructor,
+} from "./ServiceProvider";
+
+type ExceptionHandlerConstructor = new () => ExceptionHandlerContract;
 
 export interface ApplicationOptions {
 	basePath: string;
@@ -17,7 +30,7 @@ export type MiddlewareConfigurator = (manager: MiddleWare) => void;
 export type ExceptionConfigurator = (manager: Exceptions) => void;
 export type KernelFactory = (app: Application) => HttpKernel;
 
-export class Application {
+export class Application implements ApplicationContract {
 	private readonly appName: string;
 	private readonly environment: string;
 	private readonly debug: boolean;
@@ -28,6 +41,18 @@ export class Application {
 	private kernel: HttpKernel | null = null;
 	private readonly middlewareManager = new MiddlewareManager();
 	private readonly exceptions: Exceptions;
+	private readonly container = new Container(this);
+	private readonly configRepository = new ConfigRepository();
+	private providerConstructors: ServiceProviderConstructor[] = [];
+	private includeBootstrapProviders = true;
+	private readonly providerInstances = new Map<
+		ServiceProviderConstructor,
+		ServiceProvider
+	>();
+	private exceptionHandlerClass: ExceptionHandlerConstructor =
+		DefaultExceptionHandler;
+	private readonly bootingCallbacks: Array<() => void> = [];
+	private readonly bootedCallbacks: Array<() => void> = [];
 
 	constructor(options: ApplicationOptions | string) {
 		if (typeof options === "string") {
@@ -72,6 +97,15 @@ export class Application {
 		return this;
 	}
 
+	withProviders(
+		providersList: ServiceProviderConstructor[],
+		includeBootstrapProviders = true,
+	): this {
+		this.providerConstructors.push(...providersList);
+		this.includeBootstrapProviders = includeBootstrapProviders;
+		return this;
+	}
+
 	withMiddleware(configure: MiddlewareConfigurator): this {
 		configure(this.middlewareManager);
 		return this;
@@ -79,6 +113,11 @@ export class Application {
 
 	withExceptions(configure: ExceptionConfigurator): this {
 		configure(this.exceptions);
+		return this;
+	}
+
+	withExceptionHandler(handler: ExceptionHandlerConstructor): this {
+		this.exceptionHandlerClass = handler;
 		return this;
 	}
 
@@ -97,7 +136,48 @@ export class Application {
 				middleware: this.middlewareManager.snapshot(),
 			});
 
+		this.registerBaseBindings();
+		this.initializeProviders();
+		this.bootProviders();
+
 		return this;
+	}
+
+	bind<T>(token: Token<T>, resolver: (app: Application) => T): this {
+		this.container.bind(token, resolver);
+		return this;
+	}
+
+	singleton<T>(token: Token<T>, resolver: (app: Application) => T): this {
+		this.container.singleton(token, resolver);
+		return this;
+	}
+
+	instance<T>(token: Token<T>, value: T): this {
+		this.container.instance(token, value);
+		return this;
+	}
+
+	make<T>(token: Token<T>): T {
+		return this.container.make(token);
+	}
+
+	getProvider<T extends ServiceProvider>(
+		provider: ServiceProviderConstructor<T>,
+	): T | undefined {
+		return this.providerInstances.get(provider) as T | undefined;
+	}
+
+	config<T = unknown>(key: string, defaultValue?: T): T {
+		return this.configRepository.get<T>(key, defaultValue);
+	}
+
+	booting(callback: () => void): void {
+		this.bootingCallbacks.push(callback);
+	}
+
+	booted(callback: () => void): void {
+		this.bootedCallbacks.push(callback);
 	}
 
 	captureRequest(request: Request): HttpRequest {
@@ -132,10 +212,18 @@ export class Application {
 
 	async handleError(error: unknown, request?: HttpRequest): Promise<Response> {
 		await this.exceptions.reportAll(error, request);
-		const rendered = await this.exceptions.renderFor(error, request);
 
-		if (rendered) {
-			return rendered;
+		const handler = this.resolveExceptionHandler();
+		await handler.report(error, request);
+
+		const handlerResponse = await handler.render(error, request);
+		if (handlerResponse) {
+			return handlerResponse;
+		}
+
+		const fallback = await this.exceptions.renderFor(error, request);
+		if (fallback) {
+			return fallback;
 		}
 
 		return this.fallbackResponse(error);
@@ -179,6 +267,59 @@ export class Application {
 			name: "Error",
 			message: typeof error === "string" ? error : JSON.stringify(error),
 		};
+	}
+
+	private registerBaseBindings(): void {
+		this.instance(Application, this);
+		this.instance("app", this);
+		this.singleton(ConfigRepository, () => this.configRepository);
+		this.singleton("config", () => this.configRepository);
+		if (!this.container.has(this.exceptionHandlerClass)) {
+			this.singleton(
+				this.exceptionHandlerClass,
+				() => new this.exceptionHandlerClass(),
+			);
+		}
+	}
+
+	private initializeProviders(): void {
+		const providerClasses: ServiceProviderConstructor[] = [
+			...frameworkProviders,
+			...this.providerConstructors,
+			...(this.includeBootstrapProviders ? providers : []),
+		];
+
+		for (const providerClass of providerClasses) {
+			if (this.providerInstances.has(providerClass)) {
+				continue;
+			}
+
+			const provider = new providerClass(this);
+			provider.register();
+			this.providerInstances.set(providerClass, provider);
+		}
+	}
+
+	private bootProviders(): void {
+		for (const callback of this.bootingCallbacks) {
+			callback();
+		}
+
+		for (const provider of this.providerInstances.values()) {
+			provider.boot();
+		}
+
+		for (const provider of this.providerInstances.values()) {
+			provider.booted();
+		}
+
+		for (const callback of this.bootedCallbacks) {
+			callback();
+		}
+	}
+
+	private resolveExceptionHandler(): ExceptionHandlerContract {
+		return this.make(this.exceptionHandlerClass);
 	}
 
 	private ensureKernel(): HttpKernel {

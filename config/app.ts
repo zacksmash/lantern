@@ -1,3 +1,5 @@
+import { env } from "@core/Support/env";
+
 export default {
 	name: "Lantern",
 	env: env("APP_ENV", "production"),

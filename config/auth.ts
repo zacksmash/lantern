@@ -1,3 +1,5 @@
+import { env } from "@core/Support/env";
+
 export default {
 	defaults: {
 		guard: "web",

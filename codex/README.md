@@ -10,8 +10,8 @@ Internal tracker for Codex while working inside Lantern. Keeps current understan
 
 ## Current Implementation Snapshot (Jan 2025)
 - `server.ts` now mirrors Laravel’s `index.php` (`capture → handle → terminate`) by piping Bun requests through `app.captureRequest()`, `app.dispatch()`, and `app.terminate()`, while logging the running environment + port.
-- `bootstrap/app.ts` configures routing, middleware, and exception hooks using the new `Application` API and exports a shared `app` instance.
-- `@core/Foundation` includes a real `Application`, default HTTP kernel, middleware + exception managers, and env helpers; responses currently return a JSON “Lantern is running” payload (health check on `/up`), and the kernel terminate hook is wired for future middleware stacks.
+- `bootstrap/app.ts` configures routing, middleware, exception hooks, and service providers (framework + app-level) using the new `Application` API and exports a shared `app` instance.
+- `@core/Foundation` now exposes a real IoC container, configuration repository, provider lifecycle (register → boot → booted + booting/booted callbacks), and Laravel-style exception handler contract in addition to the default HTTP kernel/middleware stack. Responses still return a JSON “Lantern is running” payload (health check on `/up`), and the kernel terminate hook is wired for future middleware stacks.
 - Controllers/routes still assume future helpers (`Route`, `inertia`, `route`, `view`) that need to be implemented before the demo app does anything dynamic.
 - Tooling references `lantern.ts` in `package.json#scripts.serve`; that file is missing, so the hot-server script still needs attention.
 - Tests now include coverage for the `Application`/kernel lifecycle, while other suites remain placeholders for future expansion.

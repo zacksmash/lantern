@@ -32,6 +32,7 @@ export const app = new Application(
 			console.error("[Lantern] Unhandled exception", error);
 		});
 	})
+	.withProviders([], true)
 	// .booted()
 	// .booting()
 	// .registered()

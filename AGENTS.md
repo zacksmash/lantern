@@ -103,6 +103,7 @@ Some of the application code has mocked out APIs and implementations that are ex
 Here are the main component directories we'd like to include in the application code that matches the Laravel core structure. Please create the classes to go in them, as it aligns with the Laravel API.
 
 Auth: User authentication and authorization
+
 - Access
 - Console
 - Events
