@@ -9,20 +9,20 @@ Internal tracker for Codex while working inside Lantern. Keeps current understan
 - **Testing & Tooling**: Bun test runner with skeleton feature/unit suites (`tests/**`), Biome + Prettier split linting, TypeScript config geared for strict bundler mode.
 
 ## Current Implementation Snapshot (Jan 2025)
-- `server.ts` only stubs `Bun.serve` handlers—real request dispatching and error handling are not wired yet.
-- `bootstrap/app.ts` sketches an `Application` API but references undefined symbols (`MiddleWare`, `middlewareManager`, etc.).
-- `@core/` contains only a README; none of the Illuminate-equivalent systems (Routing, Http, Support, Facades, Inertia helpers) exist yet, so controllers/routes rely on future APIs.
-- Demo routes/controllers (`routes/index.ts`, `app/Controllers/*`) assume helpers like `Route`, `inertia`, `route`, and `view` that need to be implemented inside `@core`.
-- Tooling references `lantern.ts` in `package.json#scripts.serve`; that file is missing, so the hot-server script currently fails.
-- Tests are placeholders (`expect(true).toBe(true)`), providing room to drive development TDD-style once real behavior lands.
+- `server.ts` now mirrors Laravel’s `index.php` (`capture → handle → terminate`) by piping Bun requests through `app.captureRequest()`, `app.dispatch()`, and `app.terminate()`, while logging the running environment + port.
+- `bootstrap/app.ts` configures routing, middleware, and exception hooks using the new `Application` API and exports a shared `app` instance.
+- `@core/Foundation` includes a real `Application`, default HTTP kernel, middleware + exception managers, and env helpers; responses currently return a JSON “Lantern is running” payload (health check on `/up`), and the kernel terminate hook is wired for future middleware stacks.
+- Controllers/routes still assume future helpers (`Route`, `inertia`, `route`, `view`) that need to be implemented before the demo app does anything dynamic.
+- Tooling references `lantern.ts` in `package.json#scripts.serve`; that file is missing, so the hot-server script still needs attention.
+- Tests now include coverage for the `Application`/kernel lifecycle, while other suites remain placeholders for future expansion.
 - Several application-level files intentionally mock the desired APIs (e.g., controllers calling `inertia()`, routing facades). Treat those as canonical contracts—don’t rewrite them; instead, build `@core` so the mocks “just work.”
 
 ## Immediate Next Steps
-1. **Bootstrap the HTTP layer**: Flesh out `server.ts` + `bootstrap/app.ts` to build the application, load providers, and proxy requests into an Http kernel.
-2. **Stand up core routing/inertia plumbing**: Implement enough of `@core/Foundation`, `@core/Routing`, `@core/Http`, and `@core/Inertia` to satisfy the sample controllers and routes.
-3. **Introduce real tests**: Replace placeholder specs with targeted feature/unit coverage (e.g., routing dispatch, controller validation, inertia responses) following the fail-first workflow.
-4. **Docs parity**: As features solidify, mirror Laravel-style documentation under `@core/docs`, ensuring helpers/facades are discoverable.
-5. **Tooling cleanup**: Align `package.json` scripts (e.g., provide `lantern.ts` or retarget `serve`) so dev ergonomics match the README instructions.
+1. **Routing + facades**: Layer in the Router/facade infrastructure so `Route`, `route()`, `view()`, and controller helpers finally function.
+2. **Inertia bridge**: Implement the server-side Inertia helpers (`inertia`, `optional`, shared props) expected by the controllers and Vue pages.
+3. **Meaningful tests**: Replace placeholder feature/unit suites with routing + controller coverage (in addition to the new Application tests).
+4. **Docs parity**: Keep adding Laravel-style docs for each subsystem (next up: routing + middleware stack).
+5. **Tooling cleanup**: Provide the missing `lantern.ts` entry or rework the npm scripts to point at `server.ts` so `bun run serve` behaves as documented.
 
 ## Working Agreements & Constraints
 - Every change requires `bunx tsc`, `bun run lint`, and focused `bun run test` executions with zero warnings/errors.
