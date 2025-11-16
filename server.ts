@@ -7,11 +7,7 @@ export const server = Bun.serve({
   port,
   development: app.isDebug(),
   async fetch(request: Request) {
-    const httpRequest = app.captureRequest(request);
-    const response = await app.dispatch(httpRequest);
-    await app.terminate(httpRequest, response);
-
-    return response;
+    return app.handleRequest(request);
   },
   error(error: unknown) {
     return app.handleError(error);

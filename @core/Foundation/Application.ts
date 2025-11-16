@@ -1,7 +1,9 @@
 import { ConfigRepository } from "@core/Config/Repository";
 import { Container, type Token } from "@core/Container/Container";
 import { HttpRequest } from "@core/Http/Request";
+import { Router } from "@core/Routing/Router";
 import { env, envBoolean } from "@core/Support/env";
+import { runWithRequest } from "@core/Support/helpers";
 import providers from "@root/bootstrap/providers";
 import type { RoutingConfiguration } from "./Configuration/Routing";
 import { DefaultExceptionHandler } from "./Exceptions/DefaultHandler";
@@ -130,19 +132,19 @@ export class Application implements ApplicationContract {
 	}
 
 	create(): this {
+		this.registerBaseBindings();
+
 		this.kernel =
 			this.kernelFactory?.(this) ??
 			new DefaultHttpKernel({
 				appName: this.appName,
 				environment: this.environment,
 				routing: this.routingConfiguration,
-				middleware: this.middlewareManager.snapshot(),
-				resolveMiddleware: (token) => this.make(token),
+				router: this.make(Router),
 			});
-
-		this.registerBaseBindings();
 		this.initializeProviders();
 		this.bootProviders();
+		this.bootstrapRouter();
 
 		return this;
 	}
@@ -208,10 +210,11 @@ export class Application implements ApplicationContract {
 
 	async handleRequest(request: Request): Promise<Response> {
 		const httpRequest = this.captureRequest(request);
-		const response = await this.dispatch(httpRequest);
-		await this.terminate(httpRequest, response);
-
-		return response;
+		return runWithRequest(httpRequest, async () => {
+			const response = await this.dispatch(httpRequest);
+			await this.terminate(httpRequest, response);
+			return response;
+		});
 	}
 
 	async handleError(error: unknown, request?: HttpRequest): Promise<Response> {
@@ -284,6 +287,9 @@ export class Application implements ApplicationContract {
 				() => new this.exceptionHandlerClass(),
 			);
 		}
+
+		this.singleton(Router, () => new Router(this));
+		this.singleton("router", (app) => app.make(Router));
 	}
 
 	private initializeProviders(): void {
@@ -320,6 +326,12 @@ export class Application implements ApplicationContract {
 		for (const callback of this.bootedCallbacks) {
 			callback();
 		}
+	}
+
+	private bootstrapRouter(): void {
+		const router = this.make(Router);
+		router.bindRoutes(this.routingConfiguration);
+		router.setMiddlewareSnapshot(this.middlewareManager.snapshot());
 	}
 
 	private resolveExceptionHandler(): ExceptionHandlerContract {

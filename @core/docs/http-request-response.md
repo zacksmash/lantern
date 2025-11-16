@@ -70,3 +70,22 @@ return ResponseFactory.prepare(null);                    // 204
 ```
 
 We’ll wire this factory into the router/kernel as routing comes online so controller methods can simply `return 'Hello'` or `return { ok: true }` without manually instantiating responses.
+
+### Global Helpers
+
+For syntactic sugar similar to Laravel’s global helpers, import from `@core/Support/helpers`:
+
+```ts
+import { request, response } from "@core/Support/helpers";
+
+Route.get("/", () => {
+  return response().json({ message: "Hello!" });
+});
+
+Route.get("/profile", () => {
+  const current = request();
+  return response().json({ path: current.path() });
+});
+```
+
+`response()` returns the same fluent builder shown above, and `request()` exposes the current `HttpRequest` instance for the active request context.

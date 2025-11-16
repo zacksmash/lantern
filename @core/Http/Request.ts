@@ -18,7 +18,7 @@ export class HttpRequest {
 
 	private constructor(
 		public readonly raw: Request,
-		private readonly routeParameters: Record<string, string> = {},
+		private routeParameters: Record<string, string> = {},
 	) {
 		this.urlObject = new URL(raw.url);
 		this.queryParams = this.urlObject.searchParams;
@@ -166,6 +166,10 @@ export class HttpRequest {
 		}
 
 		return this.validatedPayload as T;
+	}
+
+	setRouteParameters(parameters: Record<string, string>): void {
+		this.routeParameters = { ...parameters };
 	}
 
 	wantsJson(): boolean {

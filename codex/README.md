@@ -9,21 +9,20 @@ Internal tracker for Codex while working inside Lantern. Keeps current understan
 - **Testing & Tooling**: Bun test runner with skeleton feature/unit suites (`tests/**`), Biome + Prettier split linting, TypeScript config geared for strict bundler mode.
 
 ## Current Implementation Snapshot (Jan 2025)
-- `server.ts` now mirrors Laravel’s `index.php` (`capture → handle → terminate`) by piping Bun requests through `app.captureRequest()`, `app.dispatch()`, and `app.terminate()`, while logging the running environment + port.
+- `server.ts` now defers every request to `app.handleRequest()`, so the request context (used by the `request()` helper) is seeded consistently.
 - `bootstrap/app.ts` configures routing, middleware, exception hooks, and service providers (framework + app-level) using the new `Application` API and exports a shared `app` instance.
-- `@core/Foundation` now exposes a real IoC container, configuration repository (auto-loads everything under `config/`), provider lifecycle (register → boot → booted + booting/booted callbacks), and Laravel-style exception handler contract in addition to the default HTTP kernel. The kernel now runs requests through a configurable middleware pipeline (global + group + alias stacks) before producing a response, and responses still default to a JSON “Lantern is running” payload (health check on `/up`).
+- `@core/Foundation` now exposes a real IoC container, configuration repository (auto-loads everything under `config/`), provider lifecycle (register → boot → booted + booting/booted callbacks), and Laravel-style exception handler contract in addition to the default HTTP kernel. The kernel now runs requests through a configurable middleware pipeline (global + group + alias stacks) before producing routing responses.
 - Controllers/routes still assume future helpers (`Route`, `inertia`, `route`, `view`) that need to be implemented before the demo app does anything dynamic.
 - Tooling references `lantern.ts` in `package.json#scripts.serve`; that file is missing, so the hot-server script still needs attention.
 - Tests now include coverage for the `Application`/kernel lifecycle, while other suites remain placeholders for future expansion.
 - Several application-level files intentionally mock the desired APIs (e.g., controllers calling `inertia()`, routing facades). Treat those as canonical contracts—don’t rewrite them; instead, build `@core` so the mocks “just work.”
 
 ## Immediate Next Steps
-1. **Routing + facades**: Layer in the Router/facade infrastructure so `Route`, `route()`, `view()`, and controller helpers finally function.
-2. **Router + middleware integration**: Hook the router (once implemented) into the middleware pipeline so route-specific stacks (web/api/custom aliases) execute before controller handlers.
-3. **Laravel-style Request/Response**: Extend the new request/response layer with deeper Laravel parity (route binding, files, response macros) as routing matures; ResponseFactory already converts plain controller return values (strings/objects/dates) into HTTP responses, ready for router integration.
-4. **Inertia bridge**: Implement the server-side Inertia helpers (`inertia`, `optional`, shared props) expected by the controllers and Vue pages.
-5. **Meaningful tests**: Replace placeholder feature/unit suites with routing + controller coverage.
-6. **Docs parity**: Keep expanding docs (routing, middleware stack) and address tooling gaps (`lantern.ts`).
+1. **Routing polish**: Flesh out additional routing APIs (e.g., fallback/routesByName helpers) and tighten model binding now that the facade + router infrastructure is in place.
+2. **Laravel-style Request/Response**: Extend the new request/response layer with deeper Laravel parity (route binding improvements, file uploads, response macros); fluent helpers (`request()`, `response()`, `HttpResponse.json`) already exist.
+3. **Inertia bridge**: Implement the server-side Inertia helpers (`inertia`, `optional`, shared props) expected by the controllers and Vue pages.
+4. **Meaningful tests**: Replace placeholder feature/unit suites with routing + controller coverage.
+5. **Docs parity**: Keep expanding docs (routing, middleware stack) and address tooling gaps (`lantern.ts`).
 
 ## Working Agreements & Constraints
 - Every change requires `bunx tsc`, `bun run lint`, and focused `bun run test` executions with zero warnings/errors.

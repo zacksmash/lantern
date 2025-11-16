@@ -9,8 +9,8 @@ export const app = new Application(
 )
 	.withRouting({
 		web: `${process.cwd()}/routes/web.ts`, // array|string|null
-		api: `${process.cwd()}/routes/api.ts`, // array|string|null
-		commands: `${process.cwd()}/routes/console.ts`, // ?string
+		// api: `${process.cwd()}/routes/api.ts`, // array|string|null
+		// commands: `${process.cwd()}/routes/console.ts`, // ?string
 		health: "/up", // ?string
 	})
 	// Reference namespace Illuminate\Foundation\Configuration\Middleware
@@ -46,3 +46,5 @@ export const app = new Application(
 	// .withScopedSingletons()
 	// .withSingletons()
 	.create();
+
+globalThis.__lantern_app = app;
