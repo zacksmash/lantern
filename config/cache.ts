@@ -1,13 +1,13 @@
 export default {
 	default: "memory",
-	prefix: env("CACHE_PREFIX", "lantern_cache"),
+	prefix: env("CACHE_PREFIX", "app_cache"),
 	stores: {
 		memory: {
 			driver: "memory",
 		},
 		redis: {
 			driver: "redis",
-			prefix: env("REDIS_CACHE_PREFIX", env("CACHE_PREFIX", "lantern_cache")),
+			prefix: env("REDIS_CACHE_PREFIX", env("CACHE_PREFIX", "app_cache")),
 			options: {
 				url: env("REDIS_URL", "") || undefined,
 				host: env("REDIS_HOST", "127.0.0.1"),
@@ -36,7 +36,7 @@ export default {
 				port: Number(env("CACHE_MYSQL_PORT", "3306")),
 				username: env("CACHE_MYSQL_USERNAME", "root"),
 				password: env("CACHE_MYSQL_PASSWORD", ""),
-				database: env("CACHE_MYSQL_DATABASE", "lantern"),
+				database: env("CACHE_MYSQL_DATABASE", "app_database"),
 			},
 		},
 		pgsql: {
@@ -47,7 +47,7 @@ export default {
 				port: Number(env("CACHE_PGSQL_PORT", "5432")),
 				username: env("CACHE_PGSQL_USERNAME", "postgres"),
 				password: env("CACHE_PGSQL_PASSWORD", ""),
-				database: env("CACHE_PGSQL_DATABASE", "lantern"),
+				database: env("CACHE_PGSQL_DATABASE", "app_database"),
 			},
 		},
 	},

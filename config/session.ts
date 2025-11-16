@@ -1,6 +1,6 @@
 export default {
 	driver: env("SESSION_CACHE_DRIVER", "memory"),
-	cookie: env("SESSION_COOKIE", "lantern_session"),
+	cookie: env("SESSION_COOKIE", "app_session"),
 	lifetime: Number(env("SESSION_LIFETIME", "120")),
 	path: env("SESSION_PATH", "/"),
 	domain: env("SESSION_DOMAIN", "") || undefined,

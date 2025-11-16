@@ -19,7 +19,7 @@ export default {
 				port: Number(env("DB_PORT", "3306")),
 				username: env("DB_USERNAME", "root"),
 				password: env("DB_PASSWORD", ""),
-				database: env("DB_DATABASE", "lantern"),
+				database: env("DB_DATABASE", "app_database"),
 			},
 		},
 		pgsql: {
@@ -30,7 +30,7 @@ export default {
 				port: Number(env("DB_PORT", "5432")),
 				username: env("DB_USERNAME", "postgres"),
 				password: env("DB_PASSWORD", ""),
-				database: env("DB_DATABASE", "lantern"),
+				database: env("DB_DATABASE", "app_database"),
 			},
 		},
 	},
