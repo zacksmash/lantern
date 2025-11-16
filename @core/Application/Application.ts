@@ -3,12 +3,16 @@ import { Container, type FactoryLike, type Token } from "@core/Container";
 import type { ProviderConstructor } from "@core/Foundation/ServiceProvider";
 import { Providers } from "@core/Foundation/ServiceProvidersManifest";
 import type { HttpRequest } from "@core/Http/Request";
+import { MiddlewareBuilder } from "@core/Http/Middleware/MiddlewareBuilder";
 import type { Router } from "@core/Routing/Router";
 
 export class Application {
 	router!: Router;
 	private basePath: string = "";
 	private container: Container;
+	private middlewareConfigurators: Array<
+		(builder: MiddlewareBuilder) => void
+	> = [];
 
 	private providersRegistered = false;
 	private providersBooted = false;
@@ -34,6 +38,7 @@ export class Application {
 		this.container.instance(ContainerTokens.App, this);
 		this.container.instance(Application, this);
 
+		this.configureMiddleware();
 		await this.registerProviders();
 		await this.bootProviders();
 		this.router = this.resolve(ContainerTokens.Router);
@@ -61,8 +66,25 @@ export class Application {
 		return this.container.resolve(key);
 	}
 
+	withMiddleware(callback: (builder: MiddlewareBuilder) => void): this {
+		this.middlewareConfigurators.push(callback);
+		return this;
+	}
+
 	getContainer(): Container {
 		return this.container;
+	}
+
+	private configureMiddleware() {
+		if (this.middlewareConfigurators.length === 0) {
+			return;
+		}
+
+		const builder = new MiddlewareBuilder();
+
+		for (const configurator of this.middlewareConfigurators) {
+			configurator(builder);
+		}
 	}
 
 	private async registerProviders() {

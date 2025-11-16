@@ -9,4 +9,15 @@ export class IndexController {
 			deferred: optional(() => "This is deferred data!"),
 		});
 	}
+
+	async store(request: HttpRequest): Promise<Response> {
+		const data = await request.validate({
+			name: "string|required",
+		});
+
+		return inertia("Index", {
+			title: "Form Submitted",
+			message: `Hello, ${data.name}! Your form has been submitted successfully.`,
+		});
+	}
 }

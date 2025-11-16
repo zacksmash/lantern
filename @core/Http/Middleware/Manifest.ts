@@ -75,3 +75,53 @@ export const MiddlewareConfig: MiddlewareConfiguration = {
 		logger: LoggerMiddleware,
 	},
 };
+
+const toArray = (
+	value: MiddlewareIdentifier | MiddlewareIdentifier[],
+): MiddlewareIdentifier[] => (Array.isArray(value) ? value : [value]);
+
+export interface MiddlewareRegistrationOptions {
+	prepend?: boolean;
+}
+
+export const registerGlobalMiddleware = (
+	middleware: MiddlewareIdentifier | MiddlewareIdentifier[],
+	options: MiddlewareRegistrationOptions = {},
+) => {
+	const entries = toArray(middleware);
+	if (options.prepend) {
+		MiddlewareConfig.global.unshift(...entries);
+	} else {
+		MiddlewareConfig.global.push(...entries);
+	}
+};
+
+export const registerMiddlewareGroup = (
+	name: string,
+	middleware: MiddlewareIdentifier[],
+) => {
+	MiddlewareConfig.groups[name] = middleware.slice();
+};
+
+export const extendMiddlewareGroup = (
+	name: string,
+	middleware: MiddlewareIdentifier | MiddlewareIdentifier[],
+	options: MiddlewareRegistrationOptions = {},
+) => {
+	const entries = toArray(middleware);
+	const group = MiddlewareConfig.groups[name] ?? [];
+	MiddlewareConfig.groups[name] = group;
+
+	if (options.prepend) {
+		group.unshift(...entries);
+	} else {
+		group.push(...entries);
+	}
+};
+
+export const registerMiddlewareAlias = (
+	alias: string,
+	middleware: MiddlewareIdentifier,
+) => {
+	MiddlewareConfig.aliases[alias] = middleware;
+};

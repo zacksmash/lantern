@@ -11,13 +11,28 @@ const safeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 
 export class EncryptCookies implements Middleware {
 	static inject = [ContainerTokens.Encrypter];
+	private static configuredExcept: string[] | null = null;
 
 	constructor(private encrypter: Encrypter) {}
 
-	async handle(request: HttpRequest, next: () => Promise<Response>) {
-		const except = (globalThis.config?.(
+	static configure(options: { except?: string[] } = {}) {
+		this.configuredExcept = options.except ? options.except.slice() : [];
+	}
+
+	private static resolveExcept(): string[] {
+		if (this.configuredExcept) {
+			return this.configuredExcept;
+		}
+
+		const configExcept = globalThis.config?.(
 			"session.encrypt_except",
-		) as string[]) ?? ["XSRF-TOKEN"];
+		) as string[] | undefined;
+
+		return configExcept ?? ["XSRF-TOKEN"];
+	}
+
+	async handle(request: HttpRequest, next: () => Promise<Response>) {
+		const except = EncryptCookies.resolveExcept();
 		request.cookies().enableEncryption(this.encrypter, except);
 		return next();
 	}

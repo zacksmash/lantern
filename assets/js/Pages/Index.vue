@@ -7,9 +7,13 @@ defineProps<{
 }>();
 
 function getOptional() {
-  router.reload({
-    only: ["deferred"],
-  });
+  router.post(
+    "/",
+    {},
+    {
+      only: ["deferred"],
+    },
+  );
 }
 </script>
 

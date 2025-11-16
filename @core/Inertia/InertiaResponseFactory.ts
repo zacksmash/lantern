@@ -1,65 +1,166 @@
 import type { HttpRequest } from "@core/Http/Request";
-import type {
-	InertiaPage,
-	InertiaProps,
-	InertiaRenderOptions,
-	PropDescriptor,
-	ScrollOptions,
+import {
+	AlwaysProp,
+	type Arrayable,
+	BaseInertiaProp,
+	DeferProp,
+	type IgnoreFirstLoad,
+	type InertiaPage,
+	type InertiaProps,
+	type InertiaPropValue,
+	type InertiaRenderOptions,
+	isArrayable,
+	isInertiaProp,
+	isMergeableProp,
+	isProvidesInertiaProperties,
+	isProvidesInertiaProperty,
+	type Mergeable,
+	type ProvidesInertiaProperties,
+	type ProvidesInertiaProperty,
+	type ScrollMetadataPayload,
+	type ScrollOptions,
 	ScrollProp,
 } from "@core/Inertia/InertiaTypes";
-import { INERTIA_PROP_SYMBOL, isWrappedProp } from "@core/Inertia/InertiaTypes";
+import {
+	getSharedData,
+	INERTIA_SHARED_PROPS_ATTRIBUTE,
+	type SharedDataPayload,
+} from "@core/Inertia/SharedData";
 import { AppShellRenderer } from "@core/View/AppShellRenderer";
 import { ViteAssetTagGenerator } from "@core/Vite/AssetTagGenerator";
 
-type PartialKeys = Set<string> | null;
-
-const MERGE_INTENT_HEADER = "X-Inertia-Infinite-Scroll-Merge-Intent";
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+const HEADER = {
+	INERTIA: "X-Inertia",
+	VERSION: "X-Inertia-Version",
+	LOCATION: "X-Inertia-Location",
+	PARTIAL_COMPONENT: "X-Inertia-Partial-Component",
+	PARTIAL_ONLY: "X-Inertia-Partial-Data",
+	PARTIAL_EXCEPT: "X-Inertia-Partial-Except",
+	INFINITE_SCROLL_MERGE_INTENT: "X-Inertia-Infinite-Scroll-Merge-Intent",
+	RESET: "X-Inertia-Reset",
 };
 
-interface RenderMetadata {
-	deferred: Map<string, string[]>;
-	merge: Set<string>;
-	prepend: Set<string>;
-	deepMerge: Set<string>;
-	match: Set<string>;
-	scroll: Record<string, ScrollProp>;
+const PROVIDER_KEY_PREFIX = "__inertia_provider__";
+const DEFAULT_DEFER_GROUP = "default";
+
+type NormalizedProps = Record<
+	string,
+	InertiaPropValue | ProvidesInertiaProperties
+>;
+
+export type InertiaRenderableProps =
+	| InertiaProps
+	| Arrayable<InertiaProps>
+	| ProvidesInertiaProperties;
+
+interface ResolvedPagePayload {
+	props: Record<string, unknown>;
+	metadata: Partial<
+		Pick<
+			InertiaPage,
+			| "mergeProps"
+			| "prependProps"
+			| "deepMergeProps"
+			| "matchPropsOn"
+			| "deferredProps"
+			| "scrollProps"
+		>
+	>;
 }
 
 export class InertiaResponseFactory {
+	private versionSource:
+		| string
+		| number
+		| null
+		| ((
+				request?: HttpRequest,
+		  ) => string | number | null | Promise<string | number | null>) = null;
+
+	private encryptHistoryValue = false;
+	private urlResolver:
+		| ((request: HttpRequest) => string | Promise<string>)
+		| null = null;
+
 	constructor(
 		private readonly assets = new ViteAssetTagGenerator(),
-		private readonly template = new AppShellRenderer(),
+		private template = new AppShellRenderer(),
 	) {}
+
+	setRootView(path: string): void {
+		this.template = new AppShellRenderer(path);
+	}
+
+	version(
+		value:
+			| string
+			| number
+			| null
+			| ((
+					request?: HttpRequest,
+			  ) => string | number | null | Promise<string | number | null>),
+	): void {
+		this.versionSource = value;
+	}
+
+	async getVersion(request?: HttpRequest): Promise<string> {
+		if (!this.versionSource) {
+			return this.assets.getVersion();
+		}
+
+		if (typeof this.versionSource === "function") {
+			const resolved = await this.versionSource(request);
+			return resolved == null ? "" : String(resolved);
+		}
+
+		return this.versionSource == null ? "" : String(this.versionSource);
+	}
+
+	resolveUrlUsing(
+		resolver?: (request: HttpRequest) => string | Promise<string>,
+	): void {
+		this.urlResolver = resolver ?? null;
+	}
+
+	encryptHistory(encrypt = true): void {
+		this.encryptHistoryValue = encrypt;
+	}
 
 	async render(
 		request: HttpRequest,
 		component: string,
-		props: InertiaProps = {},
+		props: InertiaRenderableProps | null = null,
 		options: InertiaRenderOptions = {},
 	): Promise<Response> {
-		const version = options.version ?? (await this.assets.getVersion());
-		const clientVersion = request.header("X-Inertia-Version");
-		const url = this.url(request);
+		const sharedPayload =
+			request.getAttribute<SharedDataPayload>(INERTIA_SHARED_PROPS_ATTRIBUTE) ??
+			getSharedData();
+
+		const normalizedProps = this.normalizeProps(props);
+
+		const rawProps = this.mergeProps(sharedPayload, normalizedProps);
+		const version = options.version ?? (await this.getVersion(request));
+		const clientVersion = request.header(HEADER.VERSION);
+		const url = await this.resolveUrl(request);
 
 		if (clientVersion && clientVersion !== version) {
 			return new Response(null, {
 				status: 409,
-				headers: { "X-Inertia-Location": url },
+				headers: { [HEADER.LOCATION]: url },
 			});
 		}
 
-		const resolution = await this.resolveProps(request, component, props);
+		const resolved = await this.resolveProperties(request, component, rawProps);
 
 		const page: InertiaPage = {
 			component,
-			props: resolution.props,
+			props: resolved.props,
 			url,
 			version,
+			clearHistory: this.consumeClearHistoryFlag(request),
+			encryptHistory: this.encryptHistoryValue,
+			...resolved.metadata,
 		};
-
-		this.applyMetadata(page, resolution.metadata);
 
 		if (this.isInertiaRequest(request)) {
 			return this.makeJsonResponse(page, options);
@@ -79,61 +180,566 @@ export class InertiaResponseFactory {
 		});
 	}
 
-	private async resolveProps(
+	private normalizeProps(
+		props: InertiaRenderableProps | null,
+	): SharedDataPayload {
+		if (!props) {
+			return { values: {}, providers: [] };
+		}
+
+		if (isProvidesInertiaProperties(props)) {
+			return { values: {}, providers: [props] };
+		}
+
+		if (isArrayable(props)) {
+			return { values: props.toArray(), providers: [] };
+		}
+
+		return { values: props, providers: [] };
+	}
+
+	private mergeProps(
+		shared: SharedDataPayload,
+		local: SharedDataPayload,
+	): NormalizedProps {
+		const merged: NormalizedProps = {};
+		let providerIndex = 0;
+
+		const assign = (payload: SharedDataPayload) => {
+			Object.assign(merged, payload.values);
+			payload.providers.forEach((provider) => {
+				merged[`${PROVIDER_KEY_PREFIX}${providerIndex++}`] = provider;
+			});
+		};
+
+		assign(shared);
+		assign(local);
+
+		return merged;
+	}
+
+	private async resolveProperties(
 		request: HttpRequest,
 		component: string,
-		props: InertiaProps,
-	) {
-		const only = this.partialDataKeys(request, component);
-		const mergeIntent = this.mergeIntent(request);
+		rawProps: NormalizedProps,
+	): Promise<ResolvedPagePayload> {
+		const propsWithProviders = await this.resolveInertiaPropsProviders(
+			request,
+			component,
+			rawProps,
+		);
+		const filteredProps = this.resolvePartialProperties(
+			request,
+			component,
+			propsWithProviders,
+		);
+		const arrayableProps = await this.resolveArrayableProperties(
+			filteredProps,
+			request,
+		);
+		const withAlways = this.resolveAlways(rawProps, arrayableProps);
+		const props = await this.resolvePropertyInstances(withAlways, request);
 
-		const metadata: RenderMetadata = {
-			deferred: new Map(),
-			merge: new Set(),
-			prepend: new Set(),
-			deepMerge: new Set(),
-			match: new Set(),
-			scroll: {},
+		return {
+			props,
+			metadata: {
+				...this.resolveMergeProps(request, rawProps),
+				...this.resolveDeferredProps(request, component, rawProps),
+				...this.resolveScrollProps(request, rawProps),
+			},
 		};
-		const resolved: Record<string, unknown> = {};
+	}
 
-		for (const [key, rawValue] of Object.entries(props)) {
-			const descriptor = this.normalizeDescriptor(rawValue);
-			const shouldInclude = this.shouldIncludeProp(key, descriptor, only);
+	private async resolveInertiaPropsProviders(
+		request: HttpRequest,
+		component: string,
+		props: NormalizedProps,
+	): Promise<Record<string, InertiaPropValue>> {
+		const resolved: Record<string, InertiaPropValue> = {};
 
-			if (!shouldInclude) {
-				this.registerSkippedProp(key, descriptor, metadata);
+		for (const [key, value] of Object.entries(props)) {
+			if (isProvidesInertiaProperties(value)) {
+				const provided = await value.toInertiaProperties({
+					component,
+					request,
+				});
+				Object.assign(resolved, provided);
 				continue;
 			}
 
-			const value = await descriptor.resolver(request);
 			resolved[key] = value;
-			this.applyPropMetadata(
-				key,
-				descriptor,
-				value,
-				metadata,
-				mergeIntent,
-				request,
+		}
+
+		return resolved;
+	}
+
+	private resolvePartialProperties(
+		request: HttpRequest,
+		component: string,
+		props: Record<string, InertiaPropValue>,
+	): Record<string, InertiaPropValue> {
+		const isPartial = this.isPartialRequest(request, component);
+
+		if (!isPartial) {
+			return Object.fromEntries(
+				Object.entries(props).filter(
+					([, value]) => !isIgnoreFirstLoadProp(value),
+				),
 			);
 		}
 
-		return { props: resolved, metadata };
+		const only = parseHeaderList(request.header(HEADER.PARTIAL_ONLY));
+		const except = parseHeaderList(request.header(HEADER.PARTIAL_EXCEPT));
+
+		let filtered = props;
+
+		if (only.length) {
+			const subset: Record<string, InertiaPropValue> = {};
+
+			for (const key of only) {
+				const value = getByPath(filtered, key);
+				if (typeof value !== "undefined") {
+					setByPath(subset, key, value as InertiaPropValue);
+				}
+			}
+
+			filtered = subset;
+		}
+
+		if (except.length) {
+			except.forEach((key) => forgetByPath(filtered, key));
+		}
+
+		return filtered;
 	}
 
-	private partialDataKeys(request: HttpRequest, component: string) {
-		const partialComponent = request.header("X-Inertia-Partial-Component");
-		if (partialComponent !== component) return null;
+	private async resolveArrayableProperties(
+		props: Record<string, InertiaPropValue>,
+		request: HttpRequest,
+		unpackDotProps = true,
+	): Promise<Record<string, InertiaPropValue>> {
+		const resolved: Record<string, InertiaPropValue> = { ...props };
 
-		const raw = request.header("X-Inertia-Partial-Data");
-		if (!raw) return null;
+		for (const [key, value] of Object.entries(resolved)) {
+			let current: unknown = value;
 
-		const keys = raw
-			.split(",")
-			.map((key) => key.trim())
-			.filter(Boolean);
+			if (typeof current === "function" && !isInertiaProp(current)) {
+				current = await (current as (request: HttpRequest) => Promise<unknown>)(
+					request,
+				);
+			}
 
-		return new Set(keys);
+			if (isArrayable(current)) {
+				current = current.toArray();
+			}
+
+			if (isPlainObject(current)) {
+				current = await this.resolveArrayableProperties(
+					current as Record<string, InertiaPropValue>,
+					request,
+					false,
+				);
+			} else if (Array.isArray(current)) {
+				current = await Promise.all(
+					current.map((item) => this.resolveArrayEntry(item, request)),
+				);
+			}
+
+			if (unpackDotProps && key.includes(".")) {
+				setByPath(resolved, key, current as InertiaPropValue);
+				delete resolved[key];
+			} else {
+				resolved[key] = current as InertiaPropValue;
+			}
+		}
+
+		return resolved;
+	}
+
+	private async resolveArrayEntry(
+		value: unknown,
+		request: HttpRequest,
+	): Promise<unknown> {
+		let current = value;
+
+		if (isInertiaProp(current)) {
+			return current.resolve(request);
+		}
+
+		if (typeof current === "function") {
+			current = await (current as (request: HttpRequest) => unknown)(request);
+		}
+
+		if (isArrayable(current)) {
+			current = current.toArray();
+		}
+
+		if (Array.isArray(current)) {
+			return Promise.all(
+				current.map((entry) => this.resolveArrayEntry(entry, request)),
+			);
+		}
+
+		if (isPlainObject(current)) {
+			return this.resolveArrayableProperties(
+				current as Record<string, InertiaPropValue>,
+				request,
+				false,
+			);
+		}
+
+		return current;
+	}
+
+	private resolveAlways(
+		rawProps: NormalizedProps,
+		props: Record<string, InertiaPropValue>,
+	): Record<string, InertiaPropValue> {
+		const always = Object.fromEntries(
+			Object.entries(rawProps).filter(
+				([, value]) => value instanceof AlwaysProp,
+			),
+		) as Record<string, AlwaysProp>;
+
+		if (!Object.keys(always).length) {
+			return props;
+		}
+
+		return { ...always, ...props };
+	}
+
+	private async resolvePropertyInstances(
+		props: Record<string, InertiaPropValue>,
+		request: HttpRequest,
+		parentKey?: string,
+	): Promise<Record<string, unknown>> {
+		const resolved: Record<string, unknown> = {};
+
+		for (const [key, rawValue] of Object.entries(props)) {
+			const currentKey = parentKey ? `${parentKey}.${key}` : key;
+			let value: unknown = rawValue;
+
+			if (value instanceof ScrollProp) {
+				value.configureMergeIntent(request);
+			}
+
+			if (isInertiaProp(value)) {
+				value = await value.resolve(request);
+			}
+
+			if (typeof value === "function") {
+				value = await (value as (request: HttpRequest) => unknown)(request);
+			}
+
+			if (isProvidesInertiaProperty(value)) {
+				value = await value.toInertiaProperty({
+					key: currentKey,
+					props,
+					request,
+				});
+			}
+
+			if (isArrayable(value)) {
+				value = value.toArray();
+			}
+
+			if (value instanceof BaseInertiaProp) {
+				value = await value.resolve(request);
+			}
+
+			if (value instanceof Response) {
+				resolved[key] = value;
+				continue;
+			}
+
+			if (value instanceof ScrollProp) {
+				value = await value.resolve(request);
+			}
+
+			if (value instanceof Promise) {
+				value = await value;
+			}
+
+			if (Array.isArray(value)) {
+				value = await Promise.all(
+					value.map((entry, index) =>
+						this.resolveNestedValue(
+							entry,
+							request,
+							`${currentKey}.${index}`,
+							props,
+						),
+					),
+				);
+			} else if (isPlainObject(value)) {
+				value = await this.resolvePropertyInstances(
+					value as Record<string, InertiaPropValue>,
+					request,
+					currentKey,
+				);
+			}
+
+			resolved[key] = value;
+		}
+
+		return resolved;
+	}
+
+	private async resolveNestedValue(
+		value: unknown,
+		request: HttpRequest,
+		key: string,
+		props: Record<string, InertiaPropValue>,
+	): Promise<unknown> {
+		if (isInertiaProp(value)) {
+			return value.resolve(request);
+		}
+
+		if (typeof value === "function") {
+			return (value as (request: HttpRequest) => unknown)(request);
+		}
+
+		if (isProvidesInertiaProperty(value)) {
+			return value.toInertiaProperty({ key, props, request });
+		}
+
+		if (isArrayable(value)) {
+			value = value.toArray();
+		}
+
+		if (value instanceof Promise) {
+			value = await value;
+		}
+
+		if (Array.isArray(value)) {
+			return Promise.all(
+				value.map((entry, index) =>
+					this.resolveNestedValue(entry, request, `${key}.${index}`, props),
+				),
+			);
+		}
+
+		if (isPlainObject(value)) {
+			return this.resolvePropertyInstances(
+				value as Record<string, InertiaPropValue>,
+				request,
+				key,
+			);
+		}
+
+		return value;
+	}
+
+	private resolveMergeProps(
+		request: HttpRequest,
+		rawProps: NormalizedProps,
+	): Partial<
+		Pick<
+			InertiaPage,
+			"mergeProps" | "prependProps" | "deepMergeProps" | "matchPropsOn"
+		>
+	> {
+		const mergeProps = this.getMergePropsForRequest(request, rawProps);
+
+		const append = this.resolveAppendMergeProps(mergeProps);
+		const prepend = this.resolvePrependMergeProps(mergeProps);
+		const deep = this.resolveDeepMergeProps(mergeProps);
+		const match = this.resolveMergeMatchingKeys(mergeProps);
+
+		const payload: Partial<
+			Pick<
+				InertiaPage,
+				"mergeProps" | "prependProps" | "deepMergeProps" | "matchPropsOn"
+			>
+		> = {};
+
+		if (append.length) {
+			payload.mergeProps = append;
+		}
+
+		if (prepend.length) {
+			payload.prependProps = prepend;
+		}
+
+		if (deep.length) {
+			payload.deepMergeProps = deep;
+		}
+
+		if (match.length) {
+			payload.matchPropsOn = match;
+		}
+
+		return payload;
+	}
+
+	private resolveDeferredProps(
+		request: HttpRequest,
+		component: string,
+		rawProps: NormalizedProps,
+	): Partial<Pick<InertiaPage, "deferredProps">> {
+		if (this.isPartialRequest(request, component)) {
+			return {};
+		}
+
+		const grouped = new Map<string, string[]>();
+
+		for (const [key, value] of Object.entries(rawProps)) {
+			if (!(value instanceof DeferProp)) {
+				continue;
+			}
+
+			const group = value.group() ?? DEFAULT_DEFER_GROUP;
+			const existing = grouped.get(group) ?? [];
+			grouped.set(group, [...existing, key]);
+		}
+
+		if (!grouped.size) {
+			return {};
+		}
+
+		return {
+			deferredProps: Object.fromEntries(grouped.entries()),
+		};
+	}
+
+	private resolveScrollProps(
+		request: HttpRequest,
+		rawProps: NormalizedProps,
+	): Partial<Pick<InertiaPage, "scrollProps">> {
+		const resetProps = this.getResetProps(request);
+
+		const mergeable = this.getMergePropsForRequest(request, rawProps, false);
+		const scrollEntries = mergeable.filter(
+			([, prop]) => prop instanceof ScrollProp,
+		) as Array<[string, ScrollProp]>;
+
+		if (!scrollEntries.length) {
+			return {};
+		}
+
+		const scrollProps = Object.fromEntries(
+			scrollEntries.map(([key, prop]) => [
+				key,
+				{
+					...prop.metadata(),
+					reset: resetProps.includes(key),
+				} satisfies ScrollMetadataPayload,
+			]),
+		);
+
+		return { scrollProps };
+	}
+
+	private getMergePropsForRequest(
+		request: HttpRequest,
+		rawProps: NormalizedProps,
+		rejectResetProps = true,
+	): Array<[string, Mergeable]> {
+		const resetProps = rejectResetProps ? this.getResetProps(request) : [];
+		const only = parseHeaderList(request.header(HEADER.PARTIAL_ONLY));
+		const except = parseHeaderList(request.header(HEADER.PARTIAL_EXCEPT));
+
+		return Object.entries(rawProps)
+			.filter(
+				(
+					entry,
+				): entry is [string, BaseInertiaProp & { shouldMerge(): boolean }] =>
+					isMergeableProp(entry[1]) && entry[1].shouldMerge(),
+			)
+			.filter(([key]) => !resetProps.includes(key))
+			.filter(([key]) => only.length === 0 || only.includes(key))
+			.filter(([key]) => !except.includes(key));
+	}
+
+	private resolveAppendMergeProps(
+		mergeProps: Array<[string, Mergeable]>,
+	): string[] {
+		const filtered = mergeProps.filter(([, prop]) => !prop.shouldDeepMerge());
+
+		const nested = filtered.flatMap(([key, prop]) =>
+			prop.appendsAtPaths().map((path) => `${key}.${path}`),
+		);
+
+		const root = filtered
+			.filter(([, prop]) => prop.appendsAtRoot())
+			.map(([key]) => key);
+
+		return Array.from(new Set([...nested, ...root]));
+	}
+
+	private resolvePrependMergeProps(
+		mergeProps: Array<[string, Mergeable]>,
+	): string[] {
+		const filtered = mergeProps.filter(([, prop]) => !prop.shouldDeepMerge());
+
+		const nested = filtered.flatMap(([key, prop]) =>
+			prop.prependsAtPaths().map((path) => `${key}.${path}`),
+		);
+
+		const root = filtered
+			.filter(([, prop]) => prop.prependsAtRoot())
+			.map(([key]) => key);
+
+		return Array.from(new Set([...nested, ...root]));
+	}
+
+	private resolveDeepMergeProps(
+		mergeProps: Array<[string, Mergeable]>,
+	): string[] {
+		return mergeProps
+			.filter(([, prop]) => prop.shouldDeepMerge())
+			.map(([key]) => key);
+	}
+
+	private resolveMergeMatchingKeys(
+		mergeProps: Array<[string, Mergeable]>,
+	): string[] {
+		return mergeProps
+			.flatMap(([key, prop]) =>
+				prop.matchesOn().map((match) => `${key}.${match}`),
+			)
+			.filter((value, index, array) => array.indexOf(value) === index);
+	}
+
+	private getResetProps(request: HttpRequest): string[] {
+		return parseHeaderList(request.header(HEADER.RESET));
+	}
+
+	private isInertiaRequest(request: HttpRequest): boolean {
+		return request.header(HEADER.INERTIA) === "true";
+	}
+
+	private isPartialRequest(request: HttpRequest, component: string): boolean {
+		return request.header(HEADER.PARTIAL_COMPONENT) === component;
+	}
+
+	private consumeClearHistoryFlag(request: HttpRequest): boolean {
+		const session = request.session();
+		if (!session) {
+			return false;
+		}
+
+		const shouldClear = Boolean(session.get("inertia.clear_history"));
+		if (shouldClear) {
+			session.forget("inertia.clear_history");
+		}
+
+		return shouldClear;
+	}
+
+	private async resolveUrl(request: HttpRequest): Promise<string> {
+		if (this.urlResolver) {
+			return this.urlResolver(request);
+		}
+
+		const url = request.urlInstance;
+		const pathname = url.pathname.startsWith("/")
+			? url.pathname
+			: `/${url.pathname}`;
+		const base = `${pathname}${url.search}`;
+		return request.urlInstance.pathname.endsWith("/")
+			? finishUrlWithTrailingSlash(base)
+			: base || "/";
 	}
 
 	private makeJsonResponse(
@@ -144,282 +750,108 @@ export class InertiaResponseFactory {
 			status: options.status ?? 200,
 			headers: {
 				"Content-Type": "application/json",
-				"X-Inertia": "true",
 				Vary: "Accept",
+				[HEADER.INERTIA]: "true",
 				...(options.headers ?? {}),
 			},
 		});
 	}
-
-	private isInertiaRequest(request: HttpRequest): boolean {
-		return request.header("X-Inertia") === "true";
-	}
-
-	private url(request: HttpRequest): string {
-		const url = request.urlInstance;
-		return `${url.pathname}${url.search}`;
-	}
-
-	private mergeIntent(request: HttpRequest) {
-		const intent = request.header(MERGE_INTENT_HEADER);
-		if (!intent) return null;
-		if (intent === "append" || intent === "prepend") {
-			return intent;
-		}
-		return null;
-	}
-
-	private normalizeDescriptor(
-		value: InertiaProps[keyof InertiaProps],
-	): PropDescriptor {
-		if (isWrappedProp(value)) {
-			return value[INERTIA_PROP_SYMBOL];
-		}
-
-		if (typeof value === "function") {
-			return {
-				kind: "value",
-				resolver: value as (request: HttpRequest) => unknown,
-			};
-		}
-
-		return {
-			kind: "value",
-			resolver: () => value,
-		};
-	}
-
-	private shouldIncludeProp(
-		key: string,
-		descriptor: PropDescriptor,
-		partial: PartialKeys,
-	): boolean {
-		if (!partial) {
-			return descriptor.kind !== "optional" && descriptor.kind !== "deferred";
-		}
-
-		if (descriptor.kind === "always") {
-			return true;
-		}
-
-		if (partial.has(key)) {
-			return true;
-		}
-
-		return false;
-	}
-
-	private registerSkippedProp(
-		key: string,
-		descriptor: PropDescriptor,
-		metadata: RenderMetadata,
-	) {
-		if (descriptor.kind === "deferred") {
-			const group = descriptor.group ?? key;
-			const only = descriptor.only ?? [key];
-			metadata.deferred.set(group, only);
-		}
-	}
-
-	private applyPropMetadata(
-		key: string,
-		descriptor: PropDescriptor,
-		value: unknown,
-		metadata: RenderMetadata,
-		mergeIntent: "append" | "prepend" | null,
-		request: HttpRequest,
-	) {
-		if (descriptor.kind === "merge") {
-			const match = descriptor.match ?? [];
-			this.applyMergeMetadata(
-				descriptor.path ?? key,
-				descriptor.strategy,
-				match,
-				metadata,
-				mergeIntent,
-			);
-			return;
-		}
-
-		if (descriptor.kind === "scroll") {
-			const scrollMeta = this.buildScrollMetadata(
-				key,
-				value,
-				descriptor.options ?? {},
-				request,
-				mergeIntent,
-			);
-
-			if (scrollMeta) {
-				metadata.scroll[key] = scrollMeta;
-			}
-
-			const match = descriptor.match ?? [];
-			this.applyMergeMetadata(key, "append", match, metadata, mergeIntent);
-			return;
-		}
-	}
-
-	private applyMergeMetadata(
-		path: string,
-		strategy: "append" | "prepend" | "deep",
-		match: string[],
-		metadata: RenderMetadata,
-		mergeIntent: "append" | "prepend" | null,
-	) {
-		const finalStrategy = mergeIntent ?? strategy;
-
-		if (finalStrategy === "append") {
-			metadata.merge.add(path);
-		} else if (finalStrategy === "prepend") {
-			metadata.prepend.add(path);
-		} else {
-			metadata.deepMerge.add(path);
-		}
-
-		match.forEach((item) => {
-			metadata.match.add(item);
-		});
-	}
-
-	private buildScrollMetadata(
-		_key: string,
-		value: unknown,
-		options: ScrollOptions,
-		request: HttpRequest,
-		mergeIntent: "append" | "prepend" | null,
-	): ScrollProp | null {
-		const pageName = options.pageName ?? this.defaultPageName(request);
-		const info = this.extractPaginationInfo(value, pageName);
-		const currentPage =
-			options.currentPage ??
-			info.currentPage ??
-			this.currentPageFromRequest(request, pageName);
-		const nextPage = options.nextPage ?? info.nextPage;
-		const previousPage = options.previousPage ?? info.previousPage;
-		const reset = options.reset ?? !mergeIntent;
-
-		if (
-			currentPage === undefined &&
-			nextPage === undefined &&
-			previousPage === undefined
-		) {
-			return null;
-		}
-
-		return {
-			pageName,
-			currentPage: currentPage ?? null,
-			nextPage: nextPage ?? null,
-			previousPage: previousPage ?? null,
-			reset,
-		};
-	}
-
-	private extractPaginationInfo(value: unknown, pageName: string) {
-		const record: Record<string, unknown> = isRecord(value) ? value : {};
-		const metaSource: Record<string, unknown> = isRecord(record.meta)
-			? record.meta
-			: {};
-		const linksSource: Record<string, unknown> = isRecord(record.links)
-			? record.links
-			: {};
-		const rawCurrent =
-			metaSource.current_page ??
-			metaSource.currentPage ??
-			record.current_page ??
-			record.currentPage ??
-			null;
-		const currentPage = this.coercePageValue(rawCurrent);
-		const rawNextLink =
-			typeof linksSource.next === "string"
-				? linksSource.next
-				: (record.next_page_url as string | undefined);
-		const rawPrevLink =
-			typeof linksSource.prev === "string"
-				? linksSource.prev
-				: (record.prev_page_url as string | undefined);
-
-		const nextPage =
-			this.coercePageValue(metaSource.next_page ?? metaSource.nextPage) ??
-			this.extractPageNumber(rawNextLink, pageName);
-		const previousPage =
-			this.coercePageValue(metaSource.prev_page ?? metaSource.prevPage) ??
-			this.extractPageNumber(rawPrevLink, pageName);
-
-		return { currentPage, nextPage, previousPage };
-	}
-
-	private extractPageNumber(url: string | null | undefined, pageName: string) {
-		if (!url) return null;
-
-		try {
-			const parsed = new URL(url);
-			const param = parsed.searchParams.get(pageName);
-			return param ?? null;
-		} catch {
-			return null;
-		}
-	}
-
-	private currentPageFromRequest(request: HttpRequest, pageName: string) {
-		const value = request.query(pageName);
-		if (!value) return 1;
-
-		if (Array.isArray(value)) {
-			return value[0] ?? 1;
-		}
-
-		const parsed = Number(value);
-		return Number.isNaN(parsed) ? value : parsed;
-	}
-
-	private defaultPageName(request: HttpRequest) {
-		const params = request.urlInstance.searchParams;
-		if (params.has("page")) return "page";
-		const first = params.keys().next();
-		return first.done ? "page" : first.value;
-	}
-
-	private coercePageValue(value: unknown): number | string | null {
-		if (typeof value === "number" && !Number.isNaN(value)) {
-			return value;
-		}
-
-		if (typeof value === "string") {
-			return value;
-		}
-
-		return null;
-	}
-
-	private applyMetadata(page: InertiaPage, metadata: RenderMetadata) {
-		if (metadata.deferred.size) {
-			const deferred = Object.fromEntries(metadata.deferred);
-			page.deferredProps = deferred;
-			page.props.deferred = deferred;
-		}
-
-		if (metadata.merge.size) {
-			page.mergeProps = Array.from(metadata.merge);
-		}
-
-		if (metadata.prepend.size) {
-			page.prependProps = Array.from(metadata.prepend);
-		}
-
-		if (metadata.deepMerge.size) {
-			page.deepMergeProps = Array.from(metadata.deepMerge);
-		}
-
-		if (metadata.match.size) {
-			page.matchPropsOn = Array.from(metadata.match);
-		}
-
-		if (Object.keys(metadata.scroll).length) {
-			page.scrollProps = metadata.scroll;
-		}
-	}
 }
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+const parseHeaderList = (value: string | null): string[] => {
+	if (!value) {
+		return [];
+	}
+
+	return value
+		.split(",")
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+};
+
+const setByPath = (
+	target: Record<string, unknown>,
+	path: string,
+	value: unknown,
+) => {
+	const segments = path.split(".");
+	let current: Record<string, unknown> = target;
+
+	for (let i = 0; i < segments.length; i++) {
+		const segment = segments[i]!;
+		if (i === segments.length - 1) {
+			current[segment] = value;
+			return;
+		}
+
+		if (!isPlainObject(current[segment])) {
+			current[segment] = {};
+		}
+
+		current = current[segment] as Record<string, unknown>;
+	}
+};
+
+const getByPath = (target: Record<string, unknown>, path: string): unknown => {
+	const segments = path.split(".");
+	let current: unknown = target;
+
+	for (const segment of segments) {
+		if (
+			!current ||
+			typeof current !== "object" ||
+			!(segment in (current as Record<string, unknown>))
+		) {
+			return undefined;
+		}
+
+		current = (current as Record<string, unknown>)[segment];
+	}
+
+	return current;
+};
+
+const forgetByPath = (target: Record<string, unknown>, path: string): void => {
+	const segments = path.split(".");
+	const stack: Array<{ parent: Record<string, unknown>; key: string }> = [];
+	let current: Record<string, unknown> | undefined = target;
+
+	for (const segment of segments) {
+		if (!current || typeof current !== "object") {
+			return;
+		}
+
+		stack.push({ parent: current, key: segment });
+		current = current[segment] as Record<string, unknown>;
+	}
+
+	const last = stack.pop();
+	if (last) {
+		delete last.parent[last.key];
+	}
+};
+
+const finishUrlWithTrailingSlash = (url: string): string => {
+	if (url.endsWith("/")) {
+		return url;
+	}
+
+	const [path, query] = url.split("?");
+	const base = path.endsWith("/") ? path : `${path}/`;
+	return query ? `${base}?${query}` : base;
+};
+
+const isIgnoreFirstLoadProp = (value: unknown): value is IgnoreFirstLoad => {
+	return Boolean(
+		value &&
+			typeof value === "object" &&
+			"ignoreFirstLoad" in value &&
+			(value as IgnoreFirstLoad).ignoreFirstLoad === true,
+	);
+};
 
 export const inertiaResponseFactory = new InertiaResponseFactory();
