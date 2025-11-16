@@ -1,4 +1,4 @@
-import type { HttpRequest } from "./Request";
+import type { HttpRequest } from "@core/Http/Request";
 
 export interface HttpKernel {
 	handle(request: HttpRequest): Promise<Response>;

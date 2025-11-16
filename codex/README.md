@@ -19,10 +19,10 @@ Internal tracker for Codex while working inside Lantern. Keeps current understan
 
 ## Immediate Next Steps
 1. **Routing + facades**: Layer in the Router/facade infrastructure so `Route`, `route()`, `view()`, and controller helpers finally function.
-2. **Inertia bridge**: Implement the server-side Inertia helpers (`inertia`, `optional`, shared props) expected by the controllers and Vue pages.
-3. **Meaningful tests**: Replace placeholder feature/unit suites with routing + controller coverage (in addition to the new Application tests).
-4. **Docs parity**: Keep adding Laravel-style docs for each subsystem (next up: routing + middleware stack).
-5. **Tooling cleanup**: Provide the missing `lantern.ts` entry or rework the npm scripts to point at `server.ts` so `bun run serve` behaves as documented.
+2. **Laravel-style Request/Response**: Extend the new request/response layer with deeper Laravel parity (route binding, files, response macros) as routing matures; ResponseFactory already converts plain controller return values (strings/objects/dates) into HTTP responses, ready for router integration.
+3. **Inertia bridge**: Implement the server-side Inertia helpers (`inertia`, `optional`, shared props) expected by the controllers and Vue pages.
+4. **Meaningful tests**: Replace placeholder feature/unit suites with routing + controller coverage.
+5. **Docs parity**: Keep expanding docs (routing, middleware stack) and address tooling gaps (`lantern.ts`).
 
 ## Working Agreements & Constraints
 - Every change requires `bunx tsc`, `bun run lint`, and focused `bun run test` executions with zero warnings/errors.

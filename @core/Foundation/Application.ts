@@ -1,5 +1,6 @@
 import { ConfigRepository } from "@core/Config/Repository";
 import { Container, type Token } from "@core/Container/Container";
+import { HttpRequest } from "@core/Http/Request";
 import { env, envBoolean } from "@core/Support/env";
 import providers from "@root/bootstrap/providers";
 import type { RoutingConfiguration } from "./Configuration/Routing";
@@ -9,7 +10,6 @@ import { DefaultHttpKernel } from "./Http/DefaultHttpKernel";
 import { Exceptions } from "./Http/Exceptions";
 import type { HttpKernel } from "./Http/Kernel";
 import { type MiddleWare, MiddlewareManager } from "./Http/Middleware";
-import { HttpRequest } from "./Http/Request";
 import frameworkProviders from "./Providers";
 import type {
 	ApplicationContract,

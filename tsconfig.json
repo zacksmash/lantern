@@ -13,7 +13,7 @@
 		"paths": {
 			"@/*": ["./assets/js/*"],
 			"@app/*": ["./app/*"],
-			"@core/Http/*": ["./@core/Foundation/Http/*"],
+			"@core/Http/*": ["./@core/Http/*"],
 			"@core/*": ["./@core/*"],
 			"@root/*": ["./*"]
 		},

@@ -1,6 +1,6 @@
 import { Application } from "@core/Foundation/Application";
 import type { HttpKernel } from "@core/Foundation/Http/Kernel";
-import type { HttpRequest } from "@core/Foundation/Http/Request";
+import type { HttpRequest } from "@core/Http/Request";
 
 class FakeKernel implements HttpKernel {
 	constructor(private readonly response: Response) {}

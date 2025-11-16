@@ -1,7 +1,7 @@
+import type { HttpRequest } from "@core/Http/Request";
 import type { RoutingConfiguration } from "../Configuration/Routing";
 import type { HttpKernel } from "./Kernel";
 import type { MiddlewareSnapshot } from "./Middleware";
-import type { HttpRequest } from "./Request";
 
 export interface DefaultKernelOptions {
 	appName: string;

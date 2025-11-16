@@ -1,4 +1,4 @@
-import type { HttpRequest } from "@core/Foundation/Http/Request";
+import type { HttpRequest } from "@core/Http/Request";
 
 export interface ExceptionHandlerContract {
 	report(error: unknown, request?: HttpRequest): Promise<void> | void;
