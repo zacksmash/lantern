@@ -46,7 +46,7 @@ export class Container {
 		}
 
 		if (typeof token === "function") {
-			return new (token as Constructable<T>)(this.app);
+			return new (token as Constructable<T>)();
 		}
 
 		throw new Error(`Container cannot resolve token: ${String(token)}`);

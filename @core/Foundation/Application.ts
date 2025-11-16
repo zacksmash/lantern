@@ -134,6 +134,7 @@ export class Application implements ApplicationContract {
 				environment: this.environment,
 				routing: this.routingConfiguration,
 				middleware: this.middlewareManager.snapshot(),
+				resolveMiddleware: (token) => this.make(token),
 			});
 
 		this.registerBaseBindings();

@@ -11,7 +11,7 @@ Internal tracker for Codex while working inside Lantern. Keeps current understan
 ## Current Implementation Snapshot (Jan 2025)
 - `server.ts` now mirrors Laravel’s `index.php` (`capture → handle → terminate`) by piping Bun requests through `app.captureRequest()`, `app.dispatch()`, and `app.terminate()`, while logging the running environment + port.
 - `bootstrap/app.ts` configures routing, middleware, exception hooks, and service providers (framework + app-level) using the new `Application` API and exports a shared `app` instance.
-- `@core/Foundation` now exposes a real IoC container, configuration repository, provider lifecycle (register → boot → booted + booting/booted callbacks), and Laravel-style exception handler contract in addition to the default HTTP kernel/middleware stack. Responses still return a JSON “Lantern is running” payload (health check on `/up`), and the kernel terminate hook is wired for future middleware stacks.
+- `@core/Foundation` now exposes a real IoC container, configuration repository, provider lifecycle (register → boot → booted + booting/booted callbacks), and Laravel-style exception handler contract in addition to the default HTTP kernel. The kernel now runs requests through a configurable middleware pipeline (global + group + alias stacks) before producing a response, and responses still default to a JSON “Lantern is running” payload (health check on `/up`).
 - Controllers/routes still assume future helpers (`Route`, `inertia`, `route`, `view`) that need to be implemented before the demo app does anything dynamic.
 - Tooling references `lantern.ts` in `package.json#scripts.serve`; that file is missing, so the hot-server script still needs attention.
 - Tests now include coverage for the `Application`/kernel lifecycle, while other suites remain placeholders for future expansion.
@@ -19,10 +19,11 @@ Internal tracker for Codex while working inside Lantern. Keeps current understan
 
 ## Immediate Next Steps
 1. **Routing + facades**: Layer in the Router/facade infrastructure so `Route`, `route()`, `view()`, and controller helpers finally function.
-2. **Laravel-style Request/Response**: Extend the new request/response layer with deeper Laravel parity (route binding, files, response macros) as routing matures; ResponseFactory already converts plain controller return values (strings/objects/dates) into HTTP responses, ready for router integration.
-3. **Inertia bridge**: Implement the server-side Inertia helpers (`inertia`, `optional`, shared props) expected by the controllers and Vue pages.
-4. **Meaningful tests**: Replace placeholder feature/unit suites with routing + controller coverage.
-5. **Docs parity**: Keep expanding docs (routing, middleware stack) and address tooling gaps (`lantern.ts`).
+2. **Router + middleware integration**: Hook the router (once implemented) into the middleware pipeline so route-specific stacks (web/api/custom aliases) execute before controller handlers.
+3. **Laravel-style Request/Response**: Extend the new request/response layer with deeper Laravel parity (route binding, files, response macros) as routing matures; ResponseFactory already converts plain controller return values (strings/objects/dates) into HTTP responses, ready for router integration.
+4. **Inertia bridge**: Implement the server-side Inertia helpers (`inertia`, `optional`, shared props) expected by the controllers and Vue pages.
+5. **Meaningful tests**: Replace placeholder feature/unit suites with routing + controller coverage.
+6. **Docs parity**: Keep expanding docs (routing, middleware stack) and address tooling gaps (`lantern.ts`).
 
 ## Working Agreements & Constraints
 - Every change requires `bunx tsc`, `bun run lint`, and focused `bun run test` executions with zero warnings/errors.
