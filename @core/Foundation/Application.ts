@@ -42,7 +42,7 @@ export class Application implements ApplicationContract {
 	private readonly middlewareManager = new MiddlewareManager();
 	private readonly exceptions: Exceptions;
 	private readonly container = new Container(this);
-	private readonly configRepository = new ConfigRepository();
+	private readonly configRepository: ConfigRepository;
 	private providerConstructors: ServiceProviderConstructor[] = [];
 	private includeBootstrapProviders = true;
 	private readonly providerInstances = new Map<
@@ -55,6 +55,9 @@ export class Application implements ApplicationContract {
 	private readonly bootedCallbacks: Array<() => void> = [];
 
 	constructor(options: ApplicationOptions | string) {
+		const basePath = typeof options === "string" ? options : options.basePath;
+		this.configRepository = new ConfigRepository(basePath);
+
 		if (typeof options === "string") {
 			this.basePath = options;
 			this.appName = env("APP_NAME", "Lantern");

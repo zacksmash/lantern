@@ -1,23 +1,18 @@
-import app from "@root/config/app";
-import auth from "@root/config/auth";
-import cache from "@root/config/cache";
-import database from "@root/config/database";
-import session from "@root/config/session";
+import { readdirSync } from "node:fs";
+import { createRequire } from "node:module";
+import path from "node:path";
 
 type ConfigValues = Record<string, unknown>;
 
-const CONFIG_MAP: Record<string, ConfigValues> = {
-	app,
-	auth,
-	cache,
-	database,
-	session,
-};
+const SUPPORTED_EXTENSIONS = new Set([".ts", ".js", ".mjs", ".cjs"]);
+const requireModule = createRequire(import.meta.url);
 
 export class ConfigRepository {
-	private readonly values = new Map<string, ConfigValues>(
-		Object.entries(CONFIG_MAP),
-	);
+	private readonly values = new Map<string, ConfigValues>();
+
+	constructor(private readonly basePath: string = process.cwd()) {
+		this.loadConfigDirectory();
+	}
 
 	get<T = unknown>(key: string, defaultValue?: T): T {
 		const [fileSegment, ...segments] = key.split(".");
@@ -26,6 +21,7 @@ export class ConfigRepository {
 		if (file === "") {
 			throw new Error("Configuration key cannot be empty.");
 		}
+
 		const config = this.values.get(file);
 
 		if (!config) {
@@ -79,5 +75,32 @@ export class ConfigRepository {
 
 		current[segments[segments.length - 1]!] = value;
 		this.values.set(file, config);
+	}
+
+	private loadConfigDirectory(): void {
+		const configDir = path.resolve(this.basePath, "config");
+		const entries = readdirSync(configDir, { withFileTypes: true });
+
+		for (const entry of entries) {
+			if (!entry.isFile()) {
+				continue;
+			}
+
+			const ext = path.extname(entry.name);
+			if (!SUPPORTED_EXTENSIONS.has(ext)) {
+				continue;
+			}
+
+			const key = entry.name.slice(0, -ext.length);
+			const filePath = path.join(configDir, entry.name);
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+			const loaded = requireModule(filePath);
+			const config =
+				typeof loaded?.default === "object" && loaded.default !== null
+					? loaded.default
+					: loaded;
+
+			this.values.set(key, config as ConfigValues);
+		}
 	}
 }
