@@ -1,9 +1,8 @@
-import type { HttpRequest } from "@core/Http/Request";
-import { HttpResponse } from "@core/Http/Response";
+import { response } from "@core/Support/helpers";
 
 export class IndexController {
-	async invoke(request: HttpRequest) {
-		return HttpResponse.json({
+	async invoke() {
+		return response().json({
 			message: "Welcome to Lantern!",
 		});
 	}
