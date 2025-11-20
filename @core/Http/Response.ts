@@ -3,6 +3,9 @@ type ResponseInitInput = ConstructorParameters<typeof Response>[1];
 type HeadersInput = ConstructorParameters<typeof Headers>[0];
 
 export class ResponseBuilder {
+	private static macros: Map<string, (...args: any[]) => ResponseBuilder> =
+		new Map();
+
 	private statusCode: number;
 	private readonly headers: Headers;
 	private body: BodyInput;
@@ -40,6 +43,26 @@ export class ResponseBuilder {
 		this.body = JSON.stringify(data);
 		this.headers.set("content-type", "application/json");
 		return this;
+	}
+
+	static macro(
+		name: string,
+		callback: (...args: any[]) => ResponseBuilder,
+	): void {
+		ResponseBuilder.macros.set(name, callback);
+	}
+
+	static hasMacro(name: string): boolean {
+		return ResponseBuilder.macros.has(name);
+	}
+
+	static callMacro(name: string, ...args: any[]): ResponseBuilder {
+		const macro = ResponseBuilder.macros.get(name);
+		if (!macro) {
+			throw new Error(`Response builder macro [${name}] is not defined.`);
+		}
+
+		return macro(...args);
 	}
 
 	toResponse(): Response {

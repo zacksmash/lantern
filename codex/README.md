@@ -18,8 +18,8 @@ Internal tracker for Codex while working inside Lantern. Keeps current understan
 - Several application-level files intentionally mock the desired APIs (e.g., controllers calling `inertia()`, routing facades). Treat those as canonical contracts—don’t rewrite them; instead, build `@core` so the mocks “just work.”
 
 ## Immediate Next Steps
-1. **Routing polish**: Flesh out additional routing APIs (e.g., fallback/routesByName helpers) and tighten model binding now that the facade + router infrastructure is in place.
-2. **Laravel-style Request/Response**: Extend the new request/response layer with deeper Laravel parity (route binding improvements, file uploads, response macros); fluent helpers (`request()`, `response()`, `HttpResponse.json`) already exist.
+1. **Routing polish follow-ups**: URL helpers (`route()`, `Route.toUrl` with query/fragment), route metadata caching + hydration, fallback routes, named-route lookups, pattern constraints, and model-binding error handling are in place. Next: signed/temporary URLs, domain support, and controller-friendly URL generation.
+2. **Laravel-style Request/Response**: FormRequest base class + response macros (factory + builder) exist; continue deepening parity (file uploads, custom messages/attributes, response macro typing).
 3. **Inertia bridge**: Implement the server-side Inertia helpers (`inertia`, `optional`, shared props) expected by the controllers and Vue pages.
 4. **Meaningful tests**: Replace placeholder feature/unit suites with routing + controller coverage.
 5. **Docs parity**: Keep expanding docs (routing, middleware stack) and address tooling gaps (`lantern.ts`).

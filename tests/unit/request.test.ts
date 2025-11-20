@@ -39,7 +39,7 @@ test("retrieves route params and bearer tokens", () => {
 		{ profile: "me" },
 	);
 
-	expect(req.route("profile")).toBe("me");
+	expect(req.route<string>("profile")).toBe("me");
 	expect(req.bearerToken()).toBe("secret-token");
 });
 

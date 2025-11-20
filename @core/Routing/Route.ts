@@ -13,6 +13,8 @@ export type ControllerAction =
 	| RouteCallable
 	| string;
 
+type PatternValue = string | RegExp;
+
 interface CompiledRoute {
 	regex: RegExp;
 	keys: string[];
@@ -34,6 +36,11 @@ export class Route {
 	private compiled?: CompiledRoute;
 	private parameterNames: string[] = [];
 	private compiledPath: string;
+	private readonly globalPatterns: Record<string, PatternValue>;
+	private parameterPatterns: Record<string, string> = {};
+	private missingHandler?: RouteCallable;
+	private fallbackRoute = false;
+	private readonly uriTemplate: string;
 
 	constructor(
 		private readonly methods: string[],
@@ -41,10 +48,13 @@ export class Route {
 		action: ControllerAction,
 		private readonly app: Application,
 		private readonly groupStack: RouteGroupAttributes[],
+		globalPatterns: Record<string, PatternValue> = {},
 	) {
 		this.action = action;
-		this.uri = this.normalizeUri(uri);
+		this.uriTemplate = this.normalizeUri(uri);
+		this.uri = this.uriTemplate;
 		this.compiledPath = this.uri;
+		this.globalPatterns = { ...globalPatterns };
 		this.compileRoute();
 		this.applyGroupAttributes();
 	}
@@ -57,6 +67,14 @@ export class Route {
 		return this.nameValue;
 	}
 
+	getUriTemplate(): string {
+		return this.uri;
+	}
+
+	getAction(): ControllerAction {
+		return this.action;
+	}
+
 	getMethods(): string[] {
 		return this.methods;
 	}
@@ -64,6 +82,39 @@ export class Route {
 	name(name: string): this {
 		this.nameValue = `${this.namePrefix}${name}`;
 		return this;
+	}
+
+	where(
+		parameters: string | Record<string, PatternValue>,
+		pattern?: PatternValue,
+	): this {
+		if (typeof parameters === "string") {
+			if (!pattern) {
+				throw new Error(
+					`Missing pattern for route constraint [${parameters}].`,
+				);
+			}
+
+			this.parameterPatterns[parameters] = this.normalizePattern(pattern);
+		} else {
+			for (const [key, value] of Object.entries(parameters)) {
+				this.parameterPatterns[key] = this.normalizePattern(value);
+			}
+		}
+
+		this.compileRoute();
+		return this;
+	}
+
+	whereNumber(parameter: string): this {
+		return this.where(parameter, "[0-9]+");
+	}
+
+	whereUuid(parameter: string): this {
+		return this.where(
+			parameter,
+			"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+		);
 	}
 
 	middleware(middleware: MiddlewareIdentifier | MiddlewareIdentifier[]): this {
@@ -78,6 +129,49 @@ export class Route {
 
 	getMiddleware(): MiddlewareIdentifier[] {
 		return this.middlewareStack;
+	}
+
+	missing(handler: RouteCallable): this {
+		this.missingHandler = handler;
+		return this;
+	}
+
+	getMissingHandler(): RouteCallable | undefined {
+		return this.missingHandler;
+	}
+
+	fallback(): this {
+		this.fallbackRoute = true;
+		return this;
+	}
+
+	isFallback(): boolean {
+		return this.fallbackRoute;
+	}
+
+	toPath(parameters: Record<string, unknown> = {}): string {
+		const parameterPattern = /{([^}?]+)(\?)?}/g;
+		let path = this.getUriTemplate();
+
+		path = path.replace(
+			parameterPattern,
+			(_, key: string, optional: string) => {
+				const value = parameters[key];
+				if (typeof value === "undefined") {
+					if (optional) {
+						return "";
+					}
+
+					throw new Error(`Missing required route parameter [${key}].`);
+				}
+
+				return encodeURIComponent(String(value));
+			},
+		);
+
+		// Collapse duplicated slashes and trim trailing slash (except for root)
+		const normalized = path.replace(/\/+/g, "/");
+		return normalized !== "/" ? normalized.replace(/\/+$/, "") || "/" : "/";
 	}
 
 	matches(method: string, path: string): boolean {
@@ -231,6 +325,28 @@ export class Route {
 		return `/${uri}`.replace(/\/+/g, "/").replace(/\/$/, "") || "/";
 	}
 
+	private normalizePattern(pattern: PatternValue): string {
+		const raw =
+			pattern instanceof RegExp
+				? pattern.source
+				: String(pattern).replace(/^\^/, "").replace(/\$$/, "");
+
+		return raw || "[^/]+";
+	}
+
+	private patternFor(parameter: string): string {
+		if (this.parameterPatterns[parameter]) {
+			return this.parameterPatterns[parameter]!;
+		}
+
+		const global = this.globalPatterns[parameter];
+		if (global) {
+			return this.normalizePattern(global);
+		}
+
+		return "[^/]+";
+	}
+
 	private compileRoute(): void {
 		const parameterPattern = /{([^}?]+)(\?)?}/g;
 		const keys: string[] = [];
@@ -240,7 +356,8 @@ export class Route {
 			parameterPattern,
 			(_, key: string, optional: string) => {
 				keys.push(key);
-				const segment = "([^/]+)";
+				const constraint = this.patternFor(key);
+				const segment = `(${constraint})`;
 
 				return optional ? `${segment}?` : segment;
 			},

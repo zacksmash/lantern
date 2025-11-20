@@ -13,6 +13,31 @@ export type ResponseValue =
 	| undefined;
 
 export class ResponseFactory {
+	private static macros: Map<
+		string,
+		(...args: any[]) => Response | ResponseBuilder
+	> = new Map();
+
+	static macro(
+		name: string,
+		callback: (...args: any[]) => Response | ResponseBuilder,
+	): void {
+		ResponseFactory.macros.set(name, callback);
+	}
+
+	static hasMacro(name: string): boolean {
+		return ResponseFactory.macros.has(name);
+	}
+
+	static callMacro(name: string, ...args: any[]): Response | ResponseBuilder {
+		const macro = ResponseFactory.macros.get(name);
+		if (!macro) {
+			throw new Error(`Response macro [${name}] is not defined.`);
+		}
+
+		return macro(...args);
+	}
+
 	static prepare(value: ResponseValue, init?: ResponseInit): Response {
 		if (value instanceof Response) {
 			return value;

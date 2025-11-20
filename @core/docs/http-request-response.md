@@ -24,11 +24,12 @@ export class UserController {
 - `request.all()` – merges query string + body payloads into a single object.
 - `request.input(key, default?)` / `request.only([...])` / `request.except([...])`
 - `request.query(key?, default?)` – read query params.
-- `request.route(key?)` – access route parameters (populated by the router).
+- `request.route<T = unknown>(key?)` – access route parameters (populated by the router) with optional typing for bound models.
 - `request.header(name)` / `request.headers()` / `request.bearerToken()`.
 - `request.merge(data)` – merge values into the parsed body.
 - `request.validate(rules)` – minimal rule set (`required`, `string`, `numeric`, `email`, `min`, `max`) that throws a `ValidationException` on failure. Successful validation is cached and can be retrieved via `request.validated()`.
 - `request.wantsJson()` – inspects the `Accept` header.
+- `FormRequest` – extend `@core/Http/FormRequest` to encapsulate `authorize()` + `rules()`. Instantiate inside controllers via `await FormRequest.fromRequest(request, YourFormRequest)`; it runs authorization + validation before you use it.
 
 Internally, the request parses JSON, URL-encoded, and multipart form-data payloads (other content types default to `{}`) and caches the result to keep method calls synchronous from the caller’s perspective.
 
@@ -77,6 +78,7 @@ For syntactic sugar similar to Laravel’s global helpers, import from `@core/Su
 
 ```ts
 import { request, response } from "@core/Support/helpers";
+import { route } from "@core/Support/helpers";
 
 Route.get("/", () => {
   return response().json({ message: "Hello!" });
@@ -86,6 +88,27 @@ Route.get("/profile", () => {
   const current = request();
   return response().json({ path: current.path() });
 });
+
+Route.get("/users/{user}", () => Response.redirect(route("dashboard")));
 ```
 
-`response()` returns the same fluent builder shown above, and `request()` exposes the current `HttpRequest` instance for the active request context.
+`response()` returns the same fluent builder shown above, and `request()` exposes the current `HttpRequest` instance for the active request context. `route(name, params?, absolute?)` builds URLs using named routes, inferring the origin from the active request when available.
+
+### Response Macros
+
+You can extend the response factory with custom macros:
+
+```ts
+import { ResponseFactory, HttpResponse } from "@core/Http/ResponseFactory";
+import { ResponseBuilder } from "@core/Http/Response";
+
+ResponseFactory.macro("caps", (value: string) => {
+  return HttpResponse.make(value.toUpperCase());
+});
+
+ResponseBuilder.macro("api", () => response().header("x-powered-by", "Lantern"));
+
+// Later…
+return ResponseFactory.callMacro("caps", "ok"); // => Response with "OK"
+return ResponseBuilder.callMacro("api").json({ ok: true }).toResponse();
+```

@@ -56,6 +56,18 @@ class RouteFacade {
 		return router().any(uri, action);
 	}
 
+	redirect(from: string, to: string, status = 302) {
+		return router().redirect(from, to, status);
+	}
+
+	view(uri: string, view: string, data?: Record<string, unknown>) {
+		return router().view(uri, view, data);
+	}
+
+	fallback(action: ControllerAction) {
+		return router().fallback(action);
+	}
+
 	group(attributes: RouteGroupAttributes, callback: () => void) {
 		return router().group(attributes, callback);
 	}
@@ -116,6 +128,50 @@ class RouteFacade {
 		model: ControllerConstructor & { findOrFail?: (value: string) => any },
 	) {
 		return router().model(key, model);
+	}
+
+	pattern(parameter: string, pattern: string | RegExp) {
+		return router().pattern(parameter, pattern);
+	}
+
+	patterns(definitions: Record<string, string | RegExp>) {
+		return router().patterns(definitions);
+	}
+
+	routesByName() {
+		return router().routesByName();
+	}
+
+	has(name: string) {
+		return router().has(name);
+	}
+
+	currentRouteName() {
+		return router().currentRouteName();
+	}
+
+	currentRouteAction() {
+		return router().currentRouteAction();
+	}
+
+	matchedRoute() {
+		return router().matchedRoute();
+	}
+
+	toUrl(
+		name: string,
+		parameters?: Record<string, unknown>,
+		absolute?: boolean,
+	) {
+		return router().toUrl(name, parameters, absolute);
+	}
+
+	cacheRoutes(cachePath: string) {
+		return router().cacheRoutes(cachePath);
+	}
+
+	loadCachedRoutes(cachePath: string) {
+		return router().loadCachedRoutes(cachePath);
 	}
 }
 

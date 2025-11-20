@@ -16,9 +16,9 @@ export class HttpRequest {
 	private bodyData?: PlainObject;
 	private validatedPayload?: PlainObject;
 
-	private constructor(
+	protected constructor(
 		public readonly raw: Request,
-		private routeParameters: Record<string, string> = {},
+		protected routeParameters: Record<string, unknown> = {},
 	) {
 		this.urlObject = new URL(raw.url);
 		this.queryParams = this.urlObject.searchParams;
@@ -128,17 +128,17 @@ export class HttpRequest {
 		this.bodyData = body;
 	}
 
-	route(): Record<string, string>;
-	route(key: string, defaultValue?: string): string | undefined;
-	route(
+	route(): Record<string, unknown>;
+	route<T = unknown>(key: string, defaultValue?: T): T | undefined;
+	route<T = unknown>(
 		key?: string,
-		defaultValue?: string,
-	): Record<string, string> | string | undefined {
+		defaultValue?: T,
+	): Record<string, unknown> | T | undefined {
 		if (typeof key === "undefined") {
 			return { ...this.routeParameters };
 		}
 
-		return this.routeParameters[key] ?? defaultValue;
+		return (this.routeParameters[key] ?? defaultValue) as T | undefined;
 	}
 
 	async validate<T extends PlainObject>(rules: ValidationRules): Promise<T> {
@@ -168,7 +168,7 @@ export class HttpRequest {
 		return this.validatedPayload as T;
 	}
 
-	setRouteParameters(parameters: Record<string, string>): void {
+	setRouteParameters(parameters: Record<string, unknown>): void {
 		this.routeParameters = { ...parameters };
 	}
 
