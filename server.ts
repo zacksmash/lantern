@@ -1,5 +1,5 @@
 import { ErrorHandler } from "@core/Http/ErrorHandler";
-import web from "@root/routes/web.ts";
+import routes from "@root/routes/web.ts";
 
 const isProduction =
 	(Bun.env.APP_ENV ?? Bun.env.NODE_ENV ?? "development") === "production";
@@ -10,7 +10,7 @@ const errorHandler = new ErrorHandler({
 });
 
 export const server = Bun.serve({
-	routes: web,
+	routes,
 	async fetch(request: Request) {
 		try {
 			return new Response("Unmatched route", {
