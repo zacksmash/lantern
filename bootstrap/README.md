@@ -1,1 +1,0 @@
-# Applicatoin Bootstrap files

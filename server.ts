@@ -1,17 +1,8 @@
-import { envNumber } from "@core/Support/env";
-import { app } from "./bootstrap/app";
-
-const port = envNumber("PORT", 3000);
-
 export const server = Bun.serve({
-  port,
-  development: app.isDebug(),
-  async fetch(request: Request) {
-    return app.handleRequest(request);
-  },
-  error(error: unknown) {
-    return app.handleError(error);
-  },
+	async fetch(request: Request) {
+		return new Response("Hello, World!");
+	},
+	error(error: unknown) {
+		return new Response("Internal Server Error", { status: 500 });
+	},
 });
-
-console.log(`Lantern server ready at http://localhost:${server.port} (${app.getEnvironment()})`);
