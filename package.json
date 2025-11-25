@@ -29,6 +29,7 @@
 		"dev": "bunx --bun vite",
 		"build": "bunx --bun vite build",
 		"test": "bun test",
+		"lint_check": "bunx biome check",
 		"lint_server": "bunx biome check --write",
 		"lint_client": "bunx prettier --write .",
 		"lint": "bun run lint_server && bun run lint_client"
