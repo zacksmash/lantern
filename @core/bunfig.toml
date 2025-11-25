@@ -1,0 +1,3 @@
+[test]
+root = "./Testing/tests"
+preload = ["./Testing/tests/test-case.ts"]
