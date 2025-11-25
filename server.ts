@@ -1,4 +1,5 @@
 import { ErrorHandler } from "@core/Http/ErrorHandler";
+import { runWithRequest } from "@core/Http/Request";
 import routes from "@root/routes/web.ts";
 
 const isProduction =
@@ -10,12 +11,19 @@ const errorHandler = new ErrorHandler({
 });
 
 export const server = Bun.serve({
-	routes,
 	async fetch(request: Request) {
 		try {
-			return new Response("Unmatched route", {
-				status: 404,
-				statusText: request.url,
+			return await runWithRequest(request, async (lanternRequest) => {
+				const handler = routes[lanternRequest.path];
+
+				if (!handler) {
+					return new Response("Unmatched route", {
+						status: 404,
+						statusText: request.url,
+					});
+				}
+
+				return handler(lanternRequest);
 			});
 		} catch (error) {
 			return errorHandler.handle(error, {
