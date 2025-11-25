@@ -5,14 +5,14 @@ Lantern is a Laravel-inspired web framework, built with Bun (https://bun.com). U
 ## Adding features
 
 - Always write tests for framework features in @core/Testing
-- Always check every file for typescript errors
-- Awalys run bun run lint_check to find linting errors and fix them
+- Always check every file for typescript errors `bunx tsc --noEmit`
+- Awalys run `bun run lint_check` to find linting errors and fix them
 
 ## Bun Wrapper
 
 First steps are to create Laravel-style wrappers around main Bun features
 
-- Error Handling
+- Error Handling ✅
 - Request
 - Response
 - Cookies
