@@ -13,7 +13,7 @@ Lantern is a Laravel-inspired web framework, built with Bun (https://bun.com). U
 First steps are to create Laravel-style wrappers around main Bun features
 
 - Error Handling ✅
-- Request
+- Request ✅
 - Response
 - Cookies
 - Env
